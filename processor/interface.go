@@ -2,17 +2,20 @@ package processor
 
 import (
 	"github.com/strahe/curio-sentinel/models"
-	"github.com/strahe/curio-sentinel/processor/filter"
-	"github.com/strahe/curio-sentinel/processor/transformer"
 )
 
+// EventProcessor 定义基本的事件处理能力
+type EventProcessor interface {
+	Process(event *models.Event) (*models.Event, error)
+}
+
+// ProcessorComposite 定义组合处理器的能力
+type ProcessorComposite interface {
+	AddFilter(processor EventProcessor)
+	AddTransformer(processor EventProcessor)
+}
+
 type Processor interface {
-	// Process 处理单个事件
-	Process(event models.Event) (models.Event, error)
-
-	// AddFilter 添加过滤器
-	AddFilter(filter filter.Filter)
-
-	// AddTransformer 添加转换器
-	AddTransformer(transformer transformer.Transformer)
+	EventProcessor
+	ProcessorComposite
 }

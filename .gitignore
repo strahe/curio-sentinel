@@ -44,3 +44,5 @@ Desktop.ini
 
 # Binary output directory
 build/
+/config.*
+/curio-sentinel
