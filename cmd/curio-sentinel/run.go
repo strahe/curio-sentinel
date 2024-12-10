@@ -86,23 +86,18 @@ var runCmd = &cli.Command{
 }
 
 func setupCapturer(cfg *config.Config) (capture.Capturer, error) {
-	switch cfg.Capture.Type {
-	case "yugabyte":
-		ybConfig := capture.YugabyteConfig{
-			ConnString:      cfg.Capture.Yugabyte.DSN,
-			SlotName:        cfg.Capture.Yugabyte.SlotName,
-			PublicationName: cfg.Capture.Yugabyte.PublicationName,
-			Tables:          cfg.Capture.Yugabyte.Tables,
-			DropSlotOnStop:  cfg.Capture.Yugabyte.DropSlotOnStop,
-			EventBufferSize: cfg.Capture.BufferSize,
-			ProtocolVersion: cfg.Capture.Yugabyte.ProtocolVersion,
-			EnableStreaming: cfg.Capture.Yugabyte.EnableStreaming,
-		}
-
-		return capture.NewYugabyte(ybConfig), nil
-	default:
-		return nil, fmt.Errorf("unsupported capture type: %s", cfg.Capture.Type)
+	ybConfig := capture.YugabyteConfig{
+		ConnString:      cfg.Capture.DSN,
+		SlotName:        cfg.Capture.SlotName,
+		PublicationName: cfg.Capture.PublicationName,
+		Tables:          cfg.Capture.Tables,
+		DropSlotOnStop:  cfg.Capture.DropSlotOnStop,
+		EventBufferSize: cfg.Capture.BufferSize,
+		ProtocolVersion: cfg.Capture.ProtocolVersion,
+		EnableStreaming: cfg.Capture.EnableStreaming,
 	}
+
+	return capture.NewYugabyte(ybConfig), nil
 }
 
 func setupProcessor(cfg *config.Config) (processor.Processor, error) {

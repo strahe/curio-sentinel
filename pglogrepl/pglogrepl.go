@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgio"
+	"github.com/strahe/curio-sentinel/pkg/log"
 	"github.com/yugabyte/pgx/v5/pgconn"
 	"github.com/yugabyte/pgx/v5/pgproto3"
 )
@@ -114,11 +115,6 @@ type IdentifySystemResult struct {
 	Timeline int32
 	XLogPos  LSN
 	DBName   string
-}
-
-// IdentifySystem executes the IDENTIFY_SYSTEM command.
-func IdentifySystem(ctx context.Context, conn *pgconn.PgConn) (IdentifySystemResult, error) {
-	return ParseIdentifySystem(conn.Exec(ctx, "IDENTIFY_SYSTEM"))
 }
 
 // ParseIdentifySystem parses the result of the IDENTIFY_SYSTEM command.
@@ -221,11 +217,8 @@ func CreateReplicationSlot(
 	outputPlugin string,
 	options CreateReplicationSlotOptions,
 ) (CreateReplicationSlotResult, error) {
-	var temporaryString string
-	if options.Temporary {
-		temporaryString = "TEMPORARY"
-	}
-	sql := fmt.Sprintf("CREATE_REPLICATION_SLOT %s %s %s %s %s", slotName, temporaryString, options.Mode, outputPlugin, options.SnapshotAction)
+	sql := fmt.Sprintf("SELECT pg_create_logical_replication_slot('%s', '%s');", slotName, outputPlugin)
+	log.Debug().Msgf("CreateReplicationSlot: %s", sql)
 	return ParseCreateReplicationSlot(conn.Exec(ctx, sql))
 }
 
@@ -247,14 +240,12 @@ func ParseCreateReplicationSlot(mrr *pgconn.MultiResultReader) (CreateReplicatio
 	}
 
 	row := result.Rows[0]
-	if len(row) != 4 {
+	if len(row) != 2 {
 		return crsr, fmt.Errorf("expected 4 result columns, got %d", len(row))
 	}
 
 	crsr.SlotName = string(row[0])
-	crsr.ConsistentPoint = string(row[1])
-	crsr.SnapshotName = string(row[2])
-	crsr.OutputPlugin = string(row[3])
+	crsr.OutputPlugin = string(row[1])
 
 	return crsr, nil
 }

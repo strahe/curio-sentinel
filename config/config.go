@@ -23,19 +23,7 @@ type Config struct {
 	Sink SinkConfig `json:"sink" yaml:"sink" toml:"sink"`
 }
 
-// CaptureConfig 定义捕获器配置
 type CaptureConfig struct {
-	// 捕获器类型："yugabyte", "postgres", "mysql" 等
-	Type string `json:"type" yaml:"type" toml:"type"`
-
-	// 类型特定配置
-	Yugabyte YugabyteConfig `json:"yugabyte,omitempty" yaml:"yugabyte,omitempty" toml:"yugabyte,omitempty"`
-
-	// 通用配置
-	BufferSize int `json:"buffer_size" yaml:"buffer_size" toml:"buffer_size"`
-}
-
-type YugabyteConfig struct {
 	// 连接配置
 	DSN string `json:"dsn" yaml:"dsn" toml:"dsn"`
 
@@ -53,6 +41,7 @@ type YugabyteConfig struct {
 
 	// 高级配置
 	HeartbeatMs int64 `json:"heartbeat_ms" yaml:"heartbeat_ms" toml:"heartbeat_ms"`
+	BufferSize  int   `json:"buffer_size" yaml:"buffer_size" toml:"buffer_size"`
 }
 
 // ProcessorConfig 定义处理器配置
@@ -156,4 +145,7 @@ var DefaultConfig = Config{
 	AppName:  "curio-sentinel",
 	Version:  "0.1.0",
 	LogLevel: "info",
+	Capture: CaptureConfig{
+		BufferSize: 4,
+	},
 }

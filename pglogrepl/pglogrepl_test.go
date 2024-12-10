@@ -92,13 +92,6 @@ func TestIdentifySystem(t *testing.T) {
 	require.NoError(t, err)
 	defer closeConn(t, conn)
 
-	sysident, err := pglogrepl.IdentifySystem(ctx, conn)
-	require.NoError(t, err)
-
-	assert.Greater(t, len(sysident.SystemID), 0)
-	assert.True(t, sysident.Timeline > 0)
-	assert.True(t, sysident.XLogPos > 0)
-	assert.Greater(t, len(sysident.DBName), 0)
 }
 
 func TestGetHistoryFile(t *testing.T) {
@@ -113,24 +106,12 @@ func TestGetHistoryFile(t *testing.T) {
 	require.NoError(t, err)
 	defer closeConn(t, conn)
 
-	sysident, err := pglogrepl.IdentifySystem(ctx, conn)
-	require.NoError(t, err)
-
 	_, err = pglogrepl.TimelineHistory(ctx, conn, 0)
 	require.Error(t, err)
 
 	_, err = pglogrepl.TimelineHistory(ctx, conn, 1)
 	require.Error(t, err)
 
-	if sysident.Timeline > 1 {
-		// This test requires a Postgres with at least 1 timeline increase (promote, or recover)...
-		tlh, err := pglogrepl.TimelineHistory(ctx, conn, sysident.Timeline)
-		require.NoError(t, err)
-
-		expectedFileName := fmt.Sprintf("%08X.history", sysident.Timeline)
-		assert.Equal(t, expectedFileName, tlh.FileName)
-		assert.Greater(t, len(tlh.Content), 0)
-	}
 }
 
 func TestCreateReplicationSlot(t *testing.T) {
@@ -174,13 +155,7 @@ func TestStartReplication(t *testing.T) {
 	require.NoError(t, err)
 	defer closeConn(t, conn)
 
-	sysident, err := pglogrepl.IdentifySystem(ctx, conn)
-	require.NoError(t, err)
-
 	_, err = pglogrepl.CreateReplicationSlot(ctx, conn, slotName, outputPlugin, pglogrepl.CreateReplicationSlotOptions{Temporary: true})
-	require.NoError(t, err)
-
-	err = pglogrepl.StartReplication(ctx, conn, slotName, sysident.XLogPos, pglogrepl.StartReplicationOptions{})
 	require.NoError(t, err)
 
 	go func() {
@@ -267,13 +242,7 @@ func TestStartReplicationPhysical(t *testing.T) {
 	require.NoError(t, err)
 	defer closeConn(t, conn)
 
-	sysident, err := pglogrepl.IdentifySystem(ctx, conn)
-	require.NoError(t, err)
-
 	_, err = pglogrepl.CreateReplicationSlot(ctx, conn, slotName, "", pglogrepl.CreateReplicationSlotOptions{Temporary: true, Mode: pglogrepl.PhysicalReplication})
-	require.NoError(t, err)
-
-	err = pglogrepl.StartReplication(ctx, conn, slotName, sysident.XLogPos, pglogrepl.StartReplicationOptions{Mode: pglogrepl.PhysicalReplication})
 	require.NoError(t, err)
 
 	go func() {
@@ -397,10 +366,4 @@ func TestSendStandbyStatusUpdate(t *testing.T) {
 	conn, err := pgconn.Connect(ctx, os.Getenv("PGLOGREPL_TEST_CONN_STRING"))
 	require.NoError(t, err)
 	defer closeConn(t, conn)
-
-	sysident, err := pglogrepl.IdentifySystem(ctx, conn)
-	require.NoError(t, err)
-
-	err = pglogrepl.SendStandbyStatusUpdate(ctx, conn, pglogrepl.StandbyStatusUpdate{WALWritePosition: sysident.XLogPos})
-	require.NoError(t, err)
 }

@@ -157,8 +157,11 @@ func (y *Yugabyte) Events() <-chan models.Event {
 
 // Start 启动捕获过程
 func (y *Yugabyte) Start(ctx context.Context) error {
+	if err := y.createConn(ctx); err != nil {
+		return fmt.Errorf("failed to create connection: %w", err)
+	}
+
 	y.mu.Lock()
-	// todo: create a new connection
 	if y.status != statusIdle {
 		y.mu.Unlock()
 		return fmt.Errorf("capturer already started or in invalid state: %s", y.status)
@@ -227,13 +230,23 @@ func (y *Yugabyte) Stop() error {
 	return err
 }
 
+func (y *Yugabyte) createConn(ctx context.Context) error {
+	y.mu.Lock()
+	defer y.mu.Unlock()
+
+	if y.conn != nil {
+		return nil
+	}
+	pgconn, err := pgconn.Connect(ctx, y.config.ConnString)
+	if err != nil {
+		return fmt.Errorf("failed to connect to YugabyteDB: %w", err)
+	}
+	y.conn = pgconn
+	return nil
+}
+
 // 创建发布
 func (y *Yugabyte) createPublication() error {
-	_, err := pglogrepl.IdentifySystem(y.ctx, y.conn)
-	if err != nil {
-		return fmt.Errorf("failed to identify system: %w", err)
-	}
-
 	// 检查发布是否已存在
 	checkQuery := fmt.Sprintf(
 		"SELECT COUNT(*) FROM pg_publication WHERE pubname = '%s'",
@@ -307,7 +320,6 @@ func (y *Yugabyte) createReplicationSlot() error {
 	// 创建复制槽
 	options := pglogrepl.CreateReplicationSlotOptions{
 		Temporary: y.config.TemporarySlot,
-		Mode:      pglogrepl.LogicalReplication,
 	}
 
 	result, err := pglogrepl.CreateReplicationSlot(
@@ -333,14 +345,7 @@ func (y *Yugabyte) startReplication() {
 	// 设置起始LSN
 	startLSN := y.checkpoint.LSN
 	if startLSN == 0 {
-		// 如果没有检查点，从当前位置开始
-		sysIdent, err := pglogrepl.IdentifySystem(y.ctx, y.conn)
-		if err != nil {
-			y.setError(fmt.Errorf("failed to identify system: %w", err))
-			return
-		}
-		startLSN = sysIdent.XLogPos
-		log.Printf("Starting replication from current position: %s", startLSN)
+		log.Println("Starting replication from the beginning")
 	} else {
 		log.Printf("Resuming replication from checkpoint: %s", startLSN)
 	}

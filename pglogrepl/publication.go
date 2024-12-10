@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/lib/pq"
+	"github.com/strahe/curio-sentinel/pkg/log"
 	"github.com/yugabyte/pgx/v5/pgconn"
 )
 
@@ -59,7 +60,7 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, params Publicat
 	if len(options) > 0 {
 		query += " WITH (" + strings.Join(options, ", ") + ")"
 	}
-
+	log.Debug().Msgf("CreatePublication: %s", query)
 	result := conn.Exec(ctx, query)
 	_, err := result.ReadAll()
 	if err != nil {
