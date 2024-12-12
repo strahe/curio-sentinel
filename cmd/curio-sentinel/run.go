@@ -3,13 +3,13 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/strahe/curio-sentinel/capture"
 	"github.com/strahe/curio-sentinel/config"
+	"github.com/strahe/curio-sentinel/pkg/log"
 	"github.com/strahe/curio-sentinel/processor"
 	"github.com/strahe/curio-sentinel/processor/filter"
 	"github.com/strahe/curio-sentinel/processor/transformer"
@@ -35,7 +35,7 @@ var runCmd = &cli.Command{
 
 		cfg, err := config.LoadFromFile(c.String("config"))
 		if err != nil {
-			log.Fatalf("Failed to load configuration: %v", err)
+			log.Fatal().Err(err).Msg("Failed to load configuration")
 		}
 
 		sigChan := make(chan os.Signal, 1)
@@ -44,17 +44,17 @@ var runCmd = &cli.Command{
 		// 初始化捕获器，例如YugabyteDB捕获器
 		capturer, err := setupCapturer(cfg)
 		if err != nil {
-			log.Fatalf("Failed to setup capturer: %v", err)
+			log.Fatal().Err(err).Msg("Failed to setup capturer")
 		}
 
 		proc, err := setupProcessor(cfg)
 		if err != nil {
-			log.Fatalf("Failed to setup processor: %v", err)
+			log.Fatal().Err(err).Msg("Failed to setup processor")
 		}
 
 		s, err := setupSink(cfg)
 		if err != nil {
-			log.Fatalf("Failed to setup sink: %v", err)
+			log.Fatal().Err(err).Msg("Failed to setup sink")
 		}
 
 		// 创建Sentinel实例
@@ -66,41 +66,46 @@ var runCmd = &cli.Command{
 
 		// 启动Sentinel
 		if err := sentinelSystem.Start(ctx); err != nil {
-			log.Fatalf("Failed to start sentinel: %v", err)
+			log.Fatal().Err(err).Msg("Failed to start sentinel")
 		}
 
-		log.Println("Sentinel system started successfully")
+		log.Info().Msg("Sentinel system started successfully")
 
 		// 等待终止信号
-		<-sigChan
-		log.Println("Received termination signal, shutting down...")
+		sig := <-sigChan
+		log.Info().Str("signal", sig.String()).Msg("Received signal")
 
 		if err := sentinelSystem.Stop(); err != nil {
-			log.Printf("Error during shutdown: %v", err)
+			log.Info().Err(err).Msg("Failed to stop sentinel")
 			os.Exit(1)
 		}
 
-		log.Println("Sentinel system shutdown complete")
+		log.Info().Msg("Sentinel")
 		return nil
 	},
 }
 
 func setupCapturer(cfg *config.Config) (capture.Capturer, error) {
+	log.Info().Msgf("Setup capture")
+
 	ybConfig := capture.YugabyteConfig{
-		ConnString:      cfg.Capture.DSN,
-		SlotName:        cfg.Capture.SlotName,
-		PublicationName: cfg.Capture.PublicationName,
-		Tables:          cfg.Capture.Tables,
-		DropSlotOnStop:  cfg.Capture.DropSlotOnStop,
-		EventBufferSize: cfg.Capture.BufferSize,
-		ProtocolVersion: cfg.Capture.ProtocolVersion,
-		EnableStreaming: cfg.Capture.EnableStreaming,
+		ConnString:            cfg.Capture.DSN,
+		SlotName:              cfg.Capture.SlotName,
+		PublicationName:       cfg.Capture.PublicationName,
+		Tables:                cfg.Capture.Tables,
+		DropSlotOnStop:        cfg.Capture.DropSlotOnStop,
+		DropPublicationOnStop: cfg.Capture.DropPublicationOnStop,
+		// EventBufferSize:       cfg.Capture.BufferSize,
+		// ProtocolVersion:       cfg.Capture.ProtocolVersion,
+		// EnableStreaming:       cfg.Capture.EnableStreaming,
 	}
 
-	return capture.NewYugabyte(ybConfig), nil
+	return capture.NewYugabyteCapture(ybConfig), nil
 }
 
 func setupProcessor(cfg *config.Config) (processor.Processor, error) {
+	log.Info().Msgf("Setup processor")
+
 	processor := processor.NewProcessorChain()
 
 	// 添加过滤处理器
@@ -113,11 +118,12 @@ func setupProcessor(cfg *config.Config) (processor.Processor, error) {
 	if cfg.Processor.EnableTransformation {
 		processor.AddTransformer(transformer.NewDebugTransformer())
 	}
-
 	return processor, nil
 }
 
 func setupSink(cfg *config.Config) (sink.Sink, error) {
+	log.Info().Msgf("Setup sink")
+
 	switch cfg.Sink.Type {
 	case "debug":
 		return sink.NewDebugSink(), nil

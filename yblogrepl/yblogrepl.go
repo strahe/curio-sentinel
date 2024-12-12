@@ -1,4 +1,4 @@
-// Package pglogrepl implements PostgreSQL logical replication client functionality.
+// package yblogrepl implements PostgreSQL logical replication client functionality.
 //
 // pglogrepl uses package github.com/jackc/pgconn as its underlying PostgreSQL connection.
 // Use pgconn to establish a connection to PostgreSQL and then use the pglogrepl functions
@@ -6,11 +6,10 @@
 //
 // Proper use of this package requires understanding the underlying PostgreSQL concepts.
 // See https://www.postgresql.org/docs/current/protocol-replication.html.
-package pglogrepl
+package yblogrepl
 
 import (
 	"context"
-	"database/sql/driver"
 	"encoding/binary"
 	"fmt"
 	"strconv"
@@ -18,7 +17,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgio"
-	"github.com/strahe/curio-sentinel/pkg/log"
 	"github.com/yugabyte/pgx/v5/pgconn"
 	"github.com/yugabyte/pgx/v5/pgproto3"
 )
@@ -45,68 +43,51 @@ func (mode ReplicationMode) String() string {
 	}
 }
 
-// LSN is a PostgreSQL Log Sequence Number. See https://www.postgresql.org/docs/current/datatype-pg-lsn.html.
 type LSN uint64
 
-// String formats the LSN value into the XXX/XXX format which is the text format used by PostgreSQL.
+// String formats the LSN into a postgres valid string
+// https://docs.yugabyte.com/preview/develop/change-data-capture/using-logical-replication/advanced-topic/#using-the-hybrid-time-lsn
+//
+// CREATE OR REPLACE FUNCTION get_current_lsn_format()
+// RETURNS text AS $$
+// DECLARE
+//
+//	ht_lsn bigint;
+//	formatted_lsn text;
+//
+// BEGIN
+//
+//	SELECT yb_get_current_hybrid_time_lsn() INTO ht_lsn;
+//	SELECT UPPER(format('%s/%s', to_hex(ht_lsn >> 32), to_hex(ht_lsn & 4294967295)))
+//	INTO formatted_lsn;
+//	RETURN formatted_lsn;
+//
+// END;
+// $$ LANGUAGE plpgsql;
 func (lsn LSN) String() string {
-	return fmt.Sprintf("%X/%X", uint32(lsn>>32), uint32(lsn))
+	upper := uint32(lsn >> 32)
+	lower := uint32(lsn & 0xFFFFFFFF)
+	return strings.ToUpper(fmt.Sprintf("%X/%X", upper, lower))
 }
 
-func (lsn *LSN) decodeText(src string) error {
-	lsnValue, err := ParseLSN(src)
-	if err != nil {
-		return err
-	}
-	*lsn = lsnValue
-
-	return nil
-}
-
-// Scan implements the Scanner interface.
-func (lsn *LSN) Scan(src interface{}) error {
-	if lsn == nil {
-		return nil
-	}
-
-	switch v := src.(type) {
-	case uint64:
-		*lsn = LSN(v)
-	case string:
-		if err := lsn.decodeText(v); err != nil {
-			return err
-		}
-	case []byte:
-		if err := lsn.decodeText(string(v)); err != nil {
-			return err
-		}
-	default:
-		return fmt.Errorf("can not scan %T to LSN", src)
-	}
-
-	return nil
-}
-
-// Value implements the Valuer interface.
-func (lsn LSN) Value() (driver.Value, error) {
-	return driver.Value(lsn.String()), nil
-}
-
-// ParseLSN parses the given XXX/XXX text format LSN used by PostgreSQL.
+// ParseLSN parses a LSN from a string in the XXX/XXX format.
 func ParseLSN(s string) (LSN, error) {
-	var upperHalf uint64
-	var lowerHalf uint64
-	var nparsed int
-	nparsed, err := fmt.Sscanf(s, "%X/%X", &upperHalf, &lowerHalf)
+	parts := strings.Split(s, "/")
+	if len(parts) != 2 {
+		return 0, fmt.Errorf("invalid LSN format: expected 'UPPER/LOWER'")
+	}
+
+	upper, err := strconv.ParseUint(parts[0], 16, 32)
 	if err != nil {
-		return 0, fmt.Errorf("failed to parse LSN: %w", err)
+		return 0, fmt.Errorf("invalid upper bits in LSN: %v", err)
 	}
 
-	if nparsed != 2 {
-		return 0, fmt.Errorf("failed to parsed LSN: %s", s)
+	lower, err := strconv.ParseUint(parts[1], 16, 32)
+	if err != nil {
+		return 0, fmt.Errorf("invalid lower bits in LSN: %v", err)
 	}
 
-	return LSN((upperHalf << 32) + lowerHalf), nil
+	return LSN((upper << 32) | lower), nil
 }
 
 // IdentifySystemResult is the parsed result of the IDENTIFY_SYSTEM command.
@@ -193,76 +174,6 @@ func ParseTimelineHistory(mrr *pgconn.MultiResultReader) (TimelineHistoryResult,
 	thr.FileName = string(row[0])
 	thr.Content = row[1]
 	return thr, nil
-}
-
-type CreateReplicationSlotOptions struct {
-	Temporary      bool
-	SnapshotAction string
-	Mode           ReplicationMode
-}
-
-// CreateReplicationSlotResult is the parsed results the CREATE_REPLICATION_SLOT command.
-type CreateReplicationSlotResult struct {
-	SlotName        string
-	ConsistentPoint string
-	SnapshotName    string
-	OutputPlugin    string
-}
-
-// CreateReplicationSlot creates a logical replication slot.
-func CreateReplicationSlot(
-	ctx context.Context,
-	conn *pgconn.PgConn,
-	slotName string,
-	outputPlugin string,
-	options CreateReplicationSlotOptions,
-) (CreateReplicationSlotResult, error) {
-	sql := fmt.Sprintf("SELECT pg_create_logical_replication_slot('%s', '%s');", slotName, outputPlugin)
-	log.Debug().Msgf("CreateReplicationSlot: %s", sql)
-	return ParseCreateReplicationSlot(conn.Exec(ctx, sql))
-}
-
-// ParseCreateReplicationSlot parses the result of the CREATE_REPLICATION_SLOT command.
-func ParseCreateReplicationSlot(mrr *pgconn.MultiResultReader) (CreateReplicationSlotResult, error) {
-	var crsr CreateReplicationSlotResult
-	results, err := mrr.ReadAll()
-	if err != nil {
-		return crsr, err
-	}
-
-	if len(results) != 1 {
-		return crsr, fmt.Errorf("expected 1 result set, got %d", len(results))
-	}
-
-	result := results[0]
-	if len(result.Rows) != 1 {
-		return crsr, fmt.Errorf("expected 1 result row, got %d", len(result.Rows))
-	}
-
-	row := result.Rows[0]
-	if len(row) != 2 {
-		return crsr, fmt.Errorf("expected 4 result columns, got %d", len(row))
-	}
-
-	crsr.SlotName = string(row[0])
-	crsr.OutputPlugin = string(row[1])
-
-	return crsr, nil
-}
-
-type DropReplicationSlotOptions struct {
-	Wait bool
-}
-
-// DropReplicationSlot drops a logical replication slot.
-func DropReplicationSlot(ctx context.Context, conn *pgconn.PgConn, slotName string, options DropReplicationSlotOptions) error {
-	var waitString string
-	if options.Wait {
-		waitString = "WAIT"
-	}
-	sql := fmt.Sprintf("DROP_REPLICATION_SLOT %s %s", slotName, waitString)
-	_, err := conn.Exec(ctx, sql).ReadAll()
-	return err
 }
 
 type StartReplicationOptions struct {

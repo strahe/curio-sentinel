@@ -1,14 +1,12 @@
 package capture
 
 import (
-	"context"
-
 	"github.com/strahe/curio-sentinel/models"
 )
 
 type Capturer interface {
 	// Start 启动捕获进程
-	Start(ctx context.Context) error
+	Start() error
 
 	// Stop 停止捕获进程
 	Stop() error

@@ -1,4 +1,4 @@
-package pglogrepl_test
+package yblogrepl_test
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/strahe/curio-sentinel/pglogrepl"
+	"github.com/strahe/curio-sentinel/yblogrepl"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -37,7 +37,7 @@ func (s *lsnSuite) NoError(err error) {
 }
 
 func (s *lsnSuite) TestScannerInterface() {
-	var lsn pglogrepl.LSN
+	var lsn yblogrepl.LSN
 	lsnText := "16/B374D848"
 	lsnUint64 := uint64(97500059720)
 	var err error
@@ -61,13 +61,13 @@ func (s *lsnSuite) TestScannerInterface() {
 }
 
 func (s *lsnSuite) TestScanToNil() {
-	var lsnPtr *pglogrepl.LSN
+	var lsnPtr *yblogrepl.LSN
 	err := lsnPtr.Scan("16/B374D848")
 	s.NoError(err)
 }
 
 func (s *lsnSuite) TestValueInterface() {
-	lsn := pglogrepl.LSN(97500059720)
+	lsn := yblogrepl.LSN(97500059720)
 	driverValue, err := lsn.Value()
 	s.NoError(err)
 	lsnStr, ok := driverValue.(string)
@@ -75,7 +75,7 @@ func (s *lsnSuite) TestValueInterface() {
 	s.Equal("16/B374D848", lsnStr)
 }
 
-const slotName = "pglogrepl_test"
+const slotName = "yblogrepl._test"
 const outputPlugin = "test_decoding"
 
 func closeConn(t testing.TB, conn *pgconn.PgConn) {
@@ -88,7 +88,7 @@ func TestIdentifySystem(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 
-	conn, err := pgconn.Connect(ctx, os.Getenv("PGLOGREPL_TEST_CONN_STRING"))
+	conn, err := pgconn.Connect(ctx, os.Getenv("yblogrepl._TEST_CONN_STRING"))
 	require.NoError(t, err)
 	defer closeConn(t, conn)
 
@@ -98,7 +98,7 @@ func TestGetHistoryFile(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 
-	config, err := pgconn.ParseConfig(os.Getenv("PGLOGREPL_TEST_CONN_STRING"))
+	config, err := pgconn.ParseConfig(os.Getenv("yblogrepl._TEST_CONN_STRING"))
 	require.NoError(t, err)
 	config.RuntimeParams["replication"] = "on"
 
@@ -106,10 +106,10 @@ func TestGetHistoryFile(t *testing.T) {
 	require.NoError(t, err)
 	defer closeConn(t, conn)
 
-	_, err = pglogrepl.TimelineHistory(ctx, conn, 0)
+	_, err = yblogrepl.TimelineHistory(ctx, conn, 0)
 	require.Error(t, err)
 
-	_, err = pglogrepl.TimelineHistory(ctx, conn, 1)
+	_, err = yblogrepl.TimelineHistory(ctx, conn, 1)
 	require.Error(t, err)
 
 }
@@ -118,11 +118,11 @@ func TestCreateReplicationSlot(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 
-	conn, err := pgconn.Connect(ctx, os.Getenv("PGLOGREPL_TEST_CONN_STRING"))
+	conn, err := pgconn.Connect(ctx, os.Getenv("yblogrepl._TEST_CONN_STRING"))
 	require.NoError(t, err)
 	defer closeConn(t, conn)
 
-	result, err := pglogrepl.CreateReplicationSlot(ctx, conn, slotName, outputPlugin, pglogrepl.CreateReplicationSlotOptions{Temporary: true})
+	result, err := yblogrepl.CreateReplicationSlot(ctx, conn, slotName, outputPlugin, yblogrepl.CreateReplicationSlotOptions{Temporary: true})
 	require.NoError(t, err)
 
 	assert.Equal(t, slotName, result.SlotName)
@@ -133,17 +133,17 @@ func TestDropReplicationSlot(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 
-	conn, err := pgconn.Connect(ctx, os.Getenv("PGLOGREPL_TEST_CONN_STRING"))
+	conn, err := pgconn.Connect(ctx, os.Getenv("yblogrepl._TEST_CONN_STRING"))
 	require.NoError(t, err)
 	defer closeConn(t, conn)
 
-	_, err = pglogrepl.CreateReplicationSlot(ctx, conn, slotName, outputPlugin, pglogrepl.CreateReplicationSlotOptions{Temporary: true})
+	_, err = yblogrepl.CreateReplicationSlot(ctx, conn, slotName, outputPlugin, yblogrepl.CreateReplicationSlotOptions{Temporary: true})
 	require.NoError(t, err)
 
-	err = pglogrepl.DropReplicationSlot(ctx, conn, slotName, pglogrepl.DropReplicationSlotOptions{})
+	err = yblogrepl.DropReplicationSlot(ctx, conn, slotName, yblogrepl.DropReplicationSlotOptions{})
 	require.NoError(t, err)
 
-	_, err = pglogrepl.CreateReplicationSlot(ctx, conn, slotName, outputPlugin, pglogrepl.CreateReplicationSlotOptions{Temporary: true})
+	_, err = yblogrepl.CreateReplicationSlot(ctx, conn, slotName, outputPlugin, yblogrepl.CreateReplicationSlotOptions{Temporary: true})
 	require.NoError(t, err)
 }
 
@@ -151,18 +151,18 @@ func TestStartReplication(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 
-	conn, err := pgconn.Connect(ctx, os.Getenv("PGLOGREPL_TEST_CONN_STRING"))
+	conn, err := pgconn.Connect(ctx, os.Getenv("yblogrepl._TEST_CONN_STRING"))
 	require.NoError(t, err)
 	defer closeConn(t, conn)
 
-	_, err = pglogrepl.CreateReplicationSlot(ctx, conn, slotName, outputPlugin, pglogrepl.CreateReplicationSlotOptions{Temporary: true})
+	_, err = yblogrepl.CreateReplicationSlot(ctx, conn, slotName, outputPlugin, yblogrepl.CreateReplicationSlotOptions{Temporary: true})
 	require.NoError(t, err)
 
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 		defer cancel()
 
-		config, err := pgconn.ParseConfig(os.Getenv("PGLOGREPL_TEST_CONN_STRING"))
+		config, err := pgconn.ParseConfig(os.Getenv("yblogrepl._TEST_CONN_STRING"))
 		require.NoError(t, err)
 		delete(config.RuntimeParams, "replication")
 
@@ -186,19 +186,19 @@ drop table t;
 		require.NoError(t, err)
 	}()
 
-	rxKeepAlive := func() pglogrepl.PrimaryKeepaliveMessage {
+	rxKeepAlive := func() yblogrepl.PrimaryKeepaliveMessage {
 		msg, err := conn.ReceiveMessage(ctx)
 		require.NoError(t, err)
 		cdMsg, ok := msg.(*pgproto3.CopyData)
 		require.True(t, ok)
 
-		require.Equal(t, byte(pglogrepl.PrimaryKeepaliveMessageByteID), cdMsg.Data[0])
-		pkm, err := pglogrepl.ParsePrimaryKeepaliveMessage(cdMsg.Data[1:])
+		require.Equal(t, byte(yblogrepl.PrimaryKeepaliveMessageByteID), cdMsg.Data[0])
+		pkm, err := yblogrepl.ParsePrimaryKeepaliveMessage(cdMsg.Data[1:])
 		require.NoError(t, err)
 		return pkm
 	}
 
-	rxXLogData := func() *pglogrepl.XLogData {
+	rxXLogData := func() *yblogrepl.XLogData {
 		var cdMsg *pgproto3.CopyData
 		// Discard keepalive messages
 		for {
@@ -207,12 +207,12 @@ drop table t;
 			var ok bool
 			cdMsg, ok = msg.(*pgproto3.CopyData)
 			require.True(t, ok)
-			if cdMsg.Data[0] != pglogrepl.PrimaryKeepaliveMessageByteID {
+			if cdMsg.Data[0] != yblogrepl.PrimaryKeepaliveMessageByteID {
 				break
 			}
 		}
-		require.Equal(t, byte(pglogrepl.XLogDataByteID), cdMsg.Data[0])
-		xld, err := pglogrepl.ParseXLogData(cdMsg.Data[1:])
+		require.Equal(t, byte(yblogrepl.XLogDataByteID), cdMsg.Data[0])
+		xld, err := yblogrepl.ParseXLogData(cdMsg.Data[1:])
 		require.NoError(t, err)
 		return xld
 	}
@@ -238,18 +238,18 @@ func TestStartReplicationPhysical(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*50)
 	defer cancel()
 
-	conn, err := pgconn.Connect(ctx, os.Getenv("PGLOGREPL_TEST_CONN_STRING"))
+	conn, err := pgconn.Connect(ctx, os.Getenv("yblogrepl._TEST_CONN_STRING"))
 	require.NoError(t, err)
 	defer closeConn(t, conn)
 
-	_, err = pglogrepl.CreateReplicationSlot(ctx, conn, slotName, "", pglogrepl.CreateReplicationSlotOptions{Temporary: true, Mode: pglogrepl.PhysicalReplication})
+	_, err = yblogrepl.CreateReplicationSlot(ctx, conn, slotName, "", yblogrepl.CreateReplicationSlotOptions{Temporary: true, Mode: yblogrepl.PhysicalReplication})
 	require.NoError(t, err)
 
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 		defer cancel()
 
-		config, err := pgconn.ParseConfig(os.Getenv("PGLOGREPL_TEST_CONN_STRING"))
+		config, err := pgconn.ParseConfig(os.Getenv("yblogrepl._TEST_CONN_STRING"))
 		require.NoError(t, err)
 		delete(config.RuntimeParams, "replication")
 
@@ -264,26 +264,26 @@ drop table mytable;
 		require.NoError(t, err)
 	}()
 
-	_ = func() pglogrepl.PrimaryKeepaliveMessage {
+	_ = func() yblogrepl.PrimaryKeepaliveMessage {
 		msg, err := conn.ReceiveMessage(ctx)
 		require.NoError(t, err)
 		cdMsg, ok := msg.(*pgproto3.CopyData)
 		require.True(t, ok)
 
-		require.Equal(t, byte(pglogrepl.PrimaryKeepaliveMessageByteID), cdMsg.Data[0])
-		pkm, err := pglogrepl.ParsePrimaryKeepaliveMessage(cdMsg.Data[1:])
+		require.Equal(t, byte(yblogrepl.PrimaryKeepaliveMessageByteID), cdMsg.Data[0])
+		pkm, err := yblogrepl.ParsePrimaryKeepaliveMessage(cdMsg.Data[1:])
 		require.NoError(t, err)
 		return pkm
 	}
 
-	rxXLogData := func() *pglogrepl.XLogData {
+	rxXLogData := func() *yblogrepl.XLogData {
 		msg, err := conn.ReceiveMessage(ctx)
 		require.NoError(t, err)
 		cdMsg, ok := msg.(*pgproto3.CopyData)
 		require.True(t, ok)
 
-		require.Equal(t, byte(pglogrepl.XLogDataByteID), cdMsg.Data[0])
-		xld, err := pglogrepl.ParseXLogData(cdMsg.Data[1:])
+		require.Equal(t, byte(yblogrepl.XLogDataByteID), cdMsg.Data[0])
+		xld, err := yblogrepl.ParseXLogData(cdMsg.Data[1:])
 		require.NoError(t, err)
 		return xld
 	}
@@ -291,14 +291,14 @@ drop table mytable;
 	xld := rxXLogData()
 	assert.Contains(t, string(xld.WALData), "mytable")
 
-	copyDoneResult, err := pglogrepl.SendStandbyCopyDone(ctx, conn)
+	copyDoneResult, err := yblogrepl.SendStandbyCopyDone(ctx, conn)
 	require.NoError(t, err)
 	assert.Nil(t, copyDoneResult)
 }
 
 func TestBaseBackup(t *testing.T) {
 	// base backup test could take a long time. Therefore it can be disabled.
-	envSkipTest := os.Getenv("PGLOGREPL_SKIP_BASE_BACKUP")
+	envSkipTest := os.Getenv("yblogrepl._SKIP_BASE_BACKUP")
 	if envSkipTest != "" {
 		skipTest, err := strconv.ParseBool(envSkipTest)
 		if err != nil {
@@ -308,29 +308,29 @@ func TestBaseBackup(t *testing.T) {
 		}
 	}
 
-	conn, err := pgconn.Connect(context.Background(), os.Getenv("PGLOGREPL_TEST_CONN_STRING"))
+	conn, err := pgconn.Connect(context.Background(), os.Getenv("yblogrepl._TEST_CONN_STRING"))
 	require.NoError(t, err)
 	defer closeConn(t, conn)
 
-	options := pglogrepl.BaseBackupOptions{
+	options := yblogrepl.BaseBackupOptions{
 		NoVerifyChecksums: true,
 		Progress:          true,
-		Label:             "pglogrepltest",
+		Label:             "yblogrepl.test",
 		Fast:              true,
 		WAL:               true,
 		NoWait:            true,
 		MaxRate:           1024,
 		TablespaceMap:     true,
 	}
-	startRes, err := pglogrepl.StartBaseBackup(context.Background(), conn, options)
+	startRes, err := yblogrepl.StartBaseBackup(context.Background(), conn, options)
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, startRes.TimelineID, int32(1))
 
 	//Write the tablespaces
 	for i := 0; i < len(startRes.Tablespaces)+1; i++ {
-		f, err := os.CreateTemp("", fmt.Sprintf("pglogrepl_test_tbs_%d.tar", i))
+		f, err := os.CreateTemp("", fmt.Sprintf("yblogrepl._test_tbs_%d.tar", i))
 		require.NoError(t, err)
-		err = pglogrepl.NextTableSpace(context.Background(), conn)
+		err = yblogrepl.NextTableSpace(context.Background(), conn)
 		var message pgproto3.BackendMessage
 	L:
 		for {
@@ -350,12 +350,12 @@ func TestBaseBackup(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	stopRes, err := pglogrepl.FinishBaseBackup(context.Background(), conn)
+	stopRes, err := yblogrepl.FinishBaseBackup(context.Background(), conn)
 	require.NoError(t, err)
 	require.Equal(t, startRes.TimelineID, stopRes.TimelineID)
 	require.Equal(t, len(stopRes.Tablespaces), 0)
 	require.Less(t, uint64(startRes.LSN), uint64(stopRes.LSN))
-	_, err = pglogrepl.StartBaseBackup(context.Background(), conn, options)
+	_, err = yblogrepl.StartBaseBackup(context.Background(), conn, options)
 	require.NoError(t, err)
 }
 
@@ -363,7 +363,7 @@ func TestSendStandbyStatusUpdate(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 
-	conn, err := pgconn.Connect(ctx, os.Getenv("PGLOGREPL_TEST_CONN_STRING"))
+	conn, err := pgconn.Connect(ctx, os.Getenv("yblogrepl._TEST_CONN_STRING"))
 	require.NoError(t, err)
 	defer closeConn(t, conn)
 }

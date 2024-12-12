@@ -1,4 +1,4 @@
-package pglogrepl
+package yblogrepl
 
 import (
 	"bytes"

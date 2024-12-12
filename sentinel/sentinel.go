@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/strahe/curio-sentinel/capture"
+	"github.com/strahe/curio-sentinel/pkg/log"
 	"github.com/strahe/curio-sentinel/processor"
 	"github.com/strahe/curio-sentinel/sink"
 )
@@ -73,7 +74,7 @@ func (s *Sentinel) Start(ctx context.Context) error {
 	s.ctx, s.cancel = context.WithCancel(ctx)
 
 	// 启动捕获器
-	if err := s.Capturer.Start(s.ctx); err != nil {
+	if err := s.Capturer.Start(); err != nil {
 		s.setStatus(StatusError)
 		s.cancel()
 		return fmt.Errorf("failed to start capturer: %w", err)
@@ -84,7 +85,10 @@ func (s *Sentinel) Start(ctx context.Context) error {
 // Stop 停止监控和处理流程
 func (s *Sentinel) Stop() error {
 	// 实现停止逻辑
-	panic("not implemented")
+	if err := s.Capturer.Stop(); err != nil {
+		log.Error().Err(err).Msg("failed to stop capturer")
+	}
+	return nil
 }
 
 // setStatus 设置Sentinel状态

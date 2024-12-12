@@ -28,11 +28,11 @@ type CaptureConfig struct {
 	DSN string `json:"dsn" yaml:"dsn" toml:"dsn"`
 
 	// 复制配置
-	SlotName        string   `json:"slot_name" yaml:"slot_name" toml:"slot_name"`
-	PublicationName string   `json:"publication_name" yaml:"publication_name" toml:"publication_name"`
-	Tables          []string `json:"tables" yaml:"tables" toml:"tables"`
-	DropSlotOnStop  bool     `json:"drop_slot_on_stop" yaml:"drop_slot_on_stop" toml:"drop_slot_on_stop"`
-	TemporarySlot   bool     `json:"temporary_slot" yaml:"temporary_slot" toml:"temporary_slot"`
+	SlotName              string   `json:"slot_name" yaml:"slot_name" toml:"slot_name"`
+	PublicationName       string   `json:"publication_name" yaml:"publication_name" toml:"publication_name"`
+	Tables                []string `json:"tables" yaml:"tables" toml:"tables"`
+	DropSlotOnStop        bool     `json:"drop_slot_on_stop" yaml:"drop_slot_on_stop" toml:"drop_slot_on_stop"`
+	DropPublicationOnStop bool     `json:"drop_publication_on_stop" yaml:"drop_publication_on_stop" toml:"drop_publication_on_stop"`
 
 	// 协议配置
 	ProtocolVersion string `json:"protocol_version" yaml:"protocol_version" toml:"protocol_version"` // 1 或 2

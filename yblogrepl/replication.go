@@ -1,4 +1,4 @@
-package pglogrepl
+package yblogrepl
 
 import (
 	"context"
@@ -206,4 +206,65 @@ func ListReplicationSlots(ctx context.Context, conn *pgconn.PgConn) ([]Replicati
 	}
 
 	return slots, nil
+}
+
+func CheckReplicationSlotExists(ctx context.Context, conn *pgconn.PgConn, slotName string) (bool, error) {
+
+	sql := "SELECT 1 FROM pg_replication_slots WHERE slot_name = $1"
+	result := conn.ExecParams(ctx, sql, [][]byte{[]byte(slotName)}, nil, nil, nil)
+
+	cmdTag, err := result.Close()
+	if err != nil {
+		return false, fmt.Errorf("failed to query replication slot: %w", err)
+	}
+
+	return cmdTag.RowsAffected() > 0, nil
+}
+
+type CreateReplicationSlotOptions struct {
+	OutputPlugin string
+	Temporary    bool   // Yugabyte not support temporary replication slot yet
+	LSNType      string // "SEQUENCE" or "HYBRID_TIME", default is "SEQUENCE"
+}
+
+type CreateReplicationSlotResult struct {
+	Name string
+	LSN  LSN
+}
+
+// CreateLogicalReplicationSlot creates a logical replication slot
+func CreateLogicalReplicationSlot(ctx context.Context, conn *pgconn.PgConn, slotName string, options CreateReplicationSlotOptions) (*CreateReplicationSlotResult, error) {
+	sql := fmt.Sprintf("SELECT * FROM pg_create_logical_replication_slot('%s', '%s', %v, '%s');",
+		slotName, options.OutputPlugin, options.Temporary, options.LSNType)
+
+	result := conn.Exec(ctx, sql)
+	results, err := result.ReadAll()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create logical replication slot: %w", err)
+	}
+
+	if len(results) == 0 || len(results[0].Rows) == 0 {
+		return nil, fmt.Errorf("no result returned from pg_create_logical_replication_slot")
+	}
+
+	if len(results[0].Rows[0]) < 2 {
+		return nil, fmt.Errorf("expected 2 columns in result, got %d", len(results[0].Rows[0]))
+	}
+
+	lsn, err := ParseLSN(string(results[0].Rows[0][1]))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse LSN: %w", err)
+	}
+
+	return &CreateReplicationSlotResult{
+		Name: string(results[0].Rows[0][0]),
+		LSN:  lsn,
+	}, nil
+}
+
+// DropReplicationSlot drops a logical replication slot.
+func DropReplicationSlot(ctx context.Context, conn *pgconn.PgConn, slotName string) error {
+	sql := fmt.Sprintf("SELECT pg_drop_replication_slot('%s');", slotName)
+	_, err := conn.Exec(ctx, sql).ReadAll()
+	return err
 }

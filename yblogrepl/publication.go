@@ -1,4 +1,4 @@
-package pglogrepl
+package yblogrepl
 
 import (
 	"context"
@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/lib/pq"
-	"github.com/strahe/curio-sentinel/pkg/log"
 	"github.com/yugabyte/pgx/v5/pgconn"
 )
 
@@ -60,7 +59,7 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, params Publicat
 	if len(options) > 0 {
 		query += " WITH (" + strings.Join(options, ", ") + ")"
 	}
-	log.Debug().Msgf("CreatePublication: %s", query)
+
 	result := conn.Exec(ctx, query)
 	_, err := result.ReadAll()
 	if err != nil {
@@ -77,4 +76,17 @@ func DropPublication(ctx context.Context, conn *pgconn.PgConn, name string) erro
 		return fmt.Errorf("failed to drop publication: %w", err)
 	}
 	return nil
+}
+
+func CheckPublicationExists(ctx context.Context, conn *pgconn.PgConn, name string) (bool, error) {
+
+	sql := "SELECT 1 FROM pg_publication WHERE pubname = $1"
+	result := conn.ExecParams(ctx, sql, [][]byte{[]byte(name)}, nil, nil, nil)
+
+	cmdTag, err := result.Close()
+	if err != nil {
+		return false, err
+	}
+
+	return cmdTag.RowsAffected() > 0, nil
 }
