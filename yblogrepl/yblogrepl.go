@@ -27,22 +27,6 @@ const (
 	StandbyStatusUpdateByteID     = 'r'
 )
 
-type ReplicationMode int
-
-const (
-	LogicalReplication ReplicationMode = iota
-	PhysicalReplication
-)
-
-// String formats the mode into a postgres valid string
-func (mode ReplicationMode) String() string {
-	if mode == LogicalReplication {
-		return "LOGICAL"
-	} else {
-		return "PHYSICAL"
-	}
-}
-
 type LSN uint64
 
 // String formats the LSN into a postgres valid string
@@ -178,7 +162,6 @@ func ParseTimelineHistory(mrr *pgconn.MultiResultReader) (TimelineHistoryResult,
 
 type StartReplicationOptions struct {
 	Timeline   int32 // 0 means current server timeline
-	Mode       ReplicationMode
 	PluginArgs []string
 }
 
@@ -212,13 +195,10 @@ func StartReplication(ctx context.Context, conn *pgconn.PgConn, slotName string,
 		options.PluginArgs = append(options.PluginArgs, timelineString)
 	}
 
-	sql := fmt.Sprintf("START_REPLICATION SLOT %s %s %s ", slotName, options.Mode, startLSN)
-	if options.Mode == LogicalReplication {
-		if len(options.PluginArgs) > 0 {
-			sql += fmt.Sprintf("(%s)", strings.Join(options.PluginArgs, ", "))
-		}
-	} else {
-		sql += timelineString
+	sql := fmt.Sprintf("START_REPLICATION SLOT %s LOGICAL %s ", slotName, startLSN)
+
+	if len(options.PluginArgs) > 0 {
+		sql += fmt.Sprintf("(%s)", strings.Join(options.PluginArgs, ", "))
 	}
 
 	conn.Frontend().SendQuery(&pgproto3.Query{String: sql})
@@ -245,9 +225,6 @@ func StartReplication(ctx context.Context, conn *pgconn.PgConn, slotName string,
 			// This signals the start of the replication stream.
 			return nil
 		case *pgproto3.RowDescription:
-			if options.Mode != PhysicalReplication {
-				return fmt.Errorf("received row RowDescription message in logical replication")
-			}
 			if len(msg.Fields) != 2 || string(msg.Fields[0].Name) != "next_tli" || string(msg.Fields[1].Name) != "next_tli_startpos" {
 				return fmt.Errorf("expected next timeline row description message")
 			}

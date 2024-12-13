@@ -10,6 +10,8 @@ import (
 	"github.com/strahe/curio-sentinel/pkg/log"
 	"github.com/strahe/curio-sentinel/yblogrepl"
 	"github.com/yugabyte/pgx/v5/pgconn"
+	"github.com/yugabyte/pgx/v5/pgproto3"
+	"github.com/yugabyte/pgx/v5/pgtype"
 )
 
 const (
@@ -116,12 +118,30 @@ func (y *YugabyteCapture) startReplication(ctx context.Context) {
 	defer y.wg.Done()
 	log.Info().Str("slot", y.cfg.SlotName).Msg("starting replication")
 
-	err := yblogrepl.StartReplication(ctx, y.conn, y.cfg.SlotName, yblogrepl.LSN(0), yblogrepl.StartReplicationOptions{})
+	conn, err := y.getReplicationConn(ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to get replication connection")
+		return
+	}
+	defer conn.Close(context.Background())
+
+	err = yblogrepl.StartReplication(ctx, conn, y.cfg.SlotName, yblogrepl.LSN(0), yblogrepl.StartReplicationOptions{
+		PluginArgs: []string{
+			"proto_version '1'",
+			fmt.Sprintf("publication_names '%s'", y.cfg.PublicationName),
+		},
+	})
 
 	if err != nil {
 		log.Error().Err(err).Msg("failed to start replication")
 		return
 	}
+
+	standbyMessageTimeout := time.Second * 10
+	nextStandbyMessageDeadline := time.Now().Add(standbyMessageTimeout)
+	clientXLogPos := yblogrepl.LSN(0)
+	relations := map[uint32]*yblogrepl.RelationMessage{}
+	typeMap := pgtype.NewMap()
 
 	for {
 		select {
@@ -129,8 +149,69 @@ func (y *YugabyteCapture) startReplication(ctx context.Context) {
 			log.Info().Str("reason", y.ctx.Err().Error()).Msg("capture yugabyte exiting")
 			return
 		default:
-			<-time.After(time.Second)
-			// todo: do nothing
+			if time.Now().After(nextStandbyMessageDeadline) {
+				err = yblogrepl.SendStandbyStatusUpdate(context.Background(), conn, yblogrepl.StandbyStatusUpdate{WALWritePosition: clientXLogPos})
+				if err != nil {
+					log.Error().Err(err).Msg("failed to send Standby status message")
+					continue
+				}
+				log.Printf("Sent Standby status message at %s\n", clientXLogPos.String())
+				nextStandbyMessageDeadline = time.Now().Add(standbyMessageTimeout)
+			}
+			log.Info().Msg("waiting for message")
+			ctx, cancel := context.WithDeadline(context.Background(), nextStandbyMessageDeadline)
+			rawMsg, err := conn.ReceiveMessage(ctx)
+			cancel()
+			if err != nil {
+				if pgconn.Timeout(err) {
+					log.Info().Msg("timeout")
+					continue
+				}
+				log.Error().Err(err).Msg("failed to receive message")
+			}
+			log.Info().Msgf("received message")
+
+			if _, ok := rawMsg.(*pgproto3.ErrorResponse); ok {
+				log.Error().Msg("error response received")
+				continue
+			}
+
+			msg, ok := rawMsg.(*pgproto3.CopyData)
+			if !ok {
+				log.Printf("Received unexpected message: %T\n", rawMsg)
+				continue
+			}
+
+			switch msg.Data[0] {
+			case yblogrepl.PrimaryKeepaliveMessageByteID:
+				pkm, err := yblogrepl.ParsePrimaryKeepaliveMessage(msg.Data[1:])
+				if err != nil {
+					log.Error().Err(err).Msg("PrimaryKeepaliveMessageByteID")
+					continue
+				}
+				log.Info().Str("ServerWALEnd", pkm.ServerWALEnd.String()).Str("ServerTime", pkm.ServerTime.String()).Bool("ReplyRequested", pkm.ReplyRequested).Msg("Primary Keepalive Message")
+				if pkm.ServerWALEnd > clientXLogPos {
+					clientXLogPos = pkm.ServerWALEnd
+				}
+				if pkm.ReplyRequested {
+					nextStandbyMessageDeadline = time.Time{}
+				}
+
+			case yblogrepl.XLogDataByteID:
+				xld, err := yblogrepl.ParseXLogData(msg.Data[1:])
+				if err != nil {
+					log.Err(err).Msg("ParseXLogData failed")
+					continue
+				}
+
+				processV1(xld.WALData, relations, typeMap)
+				// todo: process xlog data
+				log.Info().Str("WALStart", xld.WALStart.String()).Str("ServerWALEnd", xld.ServerWALEnd.String()).Msg("XLogData")
+
+				if xld.WALStart > clientXLogPos {
+					clientXLogPos = xld.WALStart
+				}
+			}
 		}
 	}
 }
@@ -207,18 +288,30 @@ func (y *YugabyteCapture) createConn(ctx context.Context) error {
 		return nil
 	}
 
+	pgconn, err := pgconn.Connect(ctx, y.cfg.ConnString)
+	if err != nil {
+		return fmt.Errorf("failed to connect to YugabyteDB: %w", err)
+	}
+
+	y.conn = pgconn
+	return nil
+}
+
+func (y *YugabyteCapture) getReplicationConn(ctx context.Context) (*pgconn.PgConn, error) {
+	y.mu.Lock()
+	defer y.mu.Unlock()
+
 	connConfig, err := pgconn.ParseConfig(y.cfg.ConnString)
 	if err != nil {
-		return fmt.Errorf("failed to parse connection string: %w", err)
+		return nil, fmt.Errorf("failed to parse connection string: %w", err)
 	}
 	connConfig.RuntimeParams["replication"] = "database"
 
 	pgconn, err := pgconn.ConnectConfig(ctx, connConfig)
 	if err != nil {
-		return fmt.Errorf("failed to connect to YugabyteDB: %w", err)
+		return nil, fmt.Errorf("failed to connect to YugabyteDB: %w", err)
 	}
-	y.conn = pgconn
-	return nil
+	return pgconn, nil
 }
 
 func (y *YugabyteCapture) createPublication(ctx context.Context) error {
