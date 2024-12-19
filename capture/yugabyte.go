@@ -11,7 +11,6 @@ import (
 	"github.com/strahe/curio-sentinel/yblogrepl"
 	"github.com/yugabyte/pgx/v5/pgconn"
 	"github.com/yugabyte/pgx/v5/pgproto3"
-	"github.com/yugabyte/pgx/v5/pgtype"
 )
 
 const (
@@ -140,8 +139,8 @@ func (y *YugabyteCapture) startReplication(ctx context.Context) {
 	standbyMessageTimeout := time.Second * 10
 	nextStandbyMessageDeadline := time.Now().Add(standbyMessageTimeout)
 	clientXLogPos := yblogrepl.LSN(0)
-	relations := map[uint32]*yblogrepl.RelationMessage{}
-	typeMap := pgtype.NewMap()
+
+	processor := NewProcessor()
 
 	for {
 		select {
@@ -204,9 +203,7 @@ func (y *YugabyteCapture) startReplication(ctx context.Context) {
 					continue
 				}
 
-				processV1(xld.WALData, relations, typeMap)
-				// todo: process xlog data
-				log.Info().Str("WALStart", xld.WALStart.String()).Str("ServerWALEnd", xld.ServerWALEnd.String()).Msg("XLogData")
+				processor.Process(xld.WALData)
 
 				if xld.WALStart > clientXLogPos {
 					clientXLogPos = xld.WALStart

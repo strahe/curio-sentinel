@@ -2,7 +2,6 @@ package models
 
 import "time"
 
-// OperationType 定义了数据变更操作类型
 type OperationType string
 
 const (
@@ -11,39 +10,34 @@ const (
 	Delete OperationType = "DELETE"
 )
 
-// Event 表示从数据源捕获的事件
 type Event struct {
-	// ID 是事件的唯一标识符
+	// ID is a unique identifier for the event
 	ID string `json:"id"`
 
-	// Type 表示事件类型，如 "insert", "update", "delete", "truncate", "message", 等
-	Type string `json:"type"`
+	// Type is the type of operation that was performed on the row
+	Type OperationType `json:"type"`
 
-	// Schema 是数据库模式（schema）名称
+	// Schema is the schema of the table
 	Schema string `json:"schema,omitempty"`
 
-	// Table 是数据库表名
+	// Table is the name of the table
 	Table string `json:"table,omitempty"`
 
-	// Data 包含事件数据
-	// - 对于 insert 事件，包含完整的插入行数据
-	// - 对于 update 事件，包含 "old" 和 "new" 两个子对象
-	// - 对于 delete 事件，包含被删除的行数据
-	// - 对于 truncate 事件，包含被截断的表列表
-	// - 对于 message 事件，包含消息内容
+	// Data contains the row values based on operation type:
+	// - INSERT: new row values
+	// - DELETE: values of the deleted row
+	// - UPDATE: contains both old and new values of the updated row
 	Data map[string]any `json:"data"`
 
-	// Timestamp 是事件发生的时间戳
+	// Timestamp is the time when the event was generated
 	Timestamp time.Time `json:"timestamp"`
 
-	// Source 标识事件来源，如 "postgres_logical_replication", "mysql_binlog" 等
+	// Source is the source of the event
 	Source string `json:"source,omitempty"`
 
-	// Extra 包含与特定事件相关的额外元数据，不同事件类型可能有不同的额外数据
-	// 例如事务ID、LSN位置等
+	// Extra contains additional information about the event
 	Extra map[string]any `json:"extra,omitempty"`
 
-	// Checkpoint 是事件的检查点信息，用于恢复处理位置
-	// 不同的捕获器实现会使用不同的检查点格式
+	// Checkpoint is the LSN of the event
 	Checkpoint string `json:"checkpoint,omitempty"`
 }
