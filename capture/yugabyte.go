@@ -26,13 +26,7 @@ type YugabyteConfig struct {
 	Tables                []string
 	DropSlotOnStop        bool
 	DropPublicationOnStop bool
-	// HeartbeatMs           int64
-	// EventBufferSize       int
-	ConnString string
-	// ProtocolVersion       string // "1" 或 "2"
-	// EnableStreaming       bool
-	// EnableMessages        bool
-	// TemporarySlot         bool // not supported yet
+	ConnString            string
 }
 
 type YugabyteCapture struct {
@@ -45,6 +39,7 @@ type YugabyteCapture struct {
 	cancelFn context.CancelFunc
 	wg       sync.WaitGroup
 	running  bool
+	events   chan *models.Event
 	mu       sync.Mutex
 }
 
@@ -56,7 +51,8 @@ func NewYugabyteCapture(cfg YugabyteConfig) Capturer {
 		cfg.PublicationName = defaultPublicPrefix + time.Now().Format("20060102150405")
 	}
 	yc := &YugabyteCapture{
-		cfg: cfg,
+		cfg:    cfg,
+		events: make(chan *models.Event, 32), // todo: make buffer size configurable
 	}
 	yc.ctx, yc.cancelFn = context.WithCancel(context.Background())
 
@@ -101,6 +97,10 @@ func (y *YugabyteCapture) Stop() error {
 	return nil
 }
 
+func (y *YugabyteCapture) Events() <-chan *models.Event {
+	return y.events
+}
+
 func (y *YugabyteCapture) IsRunning() bool {
 	y.mu.Lock()
 	defer y.mu.Unlock()
@@ -140,7 +140,7 @@ func (y *YugabyteCapture) startReplication(ctx context.Context) {
 	nextStandbyMessageDeadline := time.Now().Add(standbyMessageTimeout)
 	clientXLogPos := yblogrepl.LSN(0)
 
-	processor := NewProcessor()
+	processor := NewProcessor(y.events)
 
 	for {
 		select {
@@ -208,6 +208,8 @@ func (y *YugabyteCapture) startReplication(ctx context.Context) {
 				if xld.WALStart > clientXLogPos {
 					clientXLogPos = xld.WALStart
 				}
+			default:
+				log.Debug().Msg("recive unknown msg")
 			}
 		}
 	}
@@ -215,11 +217,6 @@ func (y *YugabyteCapture) startReplication(ctx context.Context) {
 
 // Checkpoint implements Capturer.
 func (y *YugabyteCapture) Checkpoint() (string, error) {
-	panic("unimplemented")
-}
-
-// Events implements Capturer.
-func (y *YugabyteCapture) Events() <-chan models.Event {
 	panic("unimplemented")
 }
 

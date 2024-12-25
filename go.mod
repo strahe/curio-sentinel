@@ -4,7 +4,6 @@ go 1.23.3
 
 require (
 	github.com/BurntSushi/toml v1.4.0
-	github.com/google/uuid v1.6.0
 	github.com/jackc/pgio v1.0.0
 	github.com/lib/pq v1.10.9
 	github.com/rs/zerolog v1.33.0

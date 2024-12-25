@@ -10,6 +10,7 @@ package yblogrepl
 
 import (
 	"context"
+	"database/sql/driver"
 	"encoding/binary"
 	"fmt"
 	"strconv"
@@ -52,6 +53,45 @@ func (lsn LSN) String() string {
 	upper := uint32(lsn >> 32)
 	lower := uint32(lsn & 0xFFFFFFFF)
 	return strings.ToUpper(fmt.Sprintf("%X/%X", upper, lower))
+}
+
+func (lsn *LSN) decodeText(src string) error {
+	lsnValue, err := ParseLSN(src)
+	if err != nil {
+		return err
+	}
+	*lsn = lsnValue
+
+	return nil
+}
+
+// Scan implements the Scanner interface.
+func (lsn *LSN) Scan(src interface{}) error {
+	if lsn == nil {
+		return nil
+	}
+
+	switch v := src.(type) {
+	case uint64:
+		*lsn = LSN(v)
+	case string:
+		if err := lsn.decodeText(v); err != nil {
+			return err
+		}
+	case []byte:
+		if err := lsn.decodeText(string(v)); err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("can not scan %T to LSN", src)
+	}
+
+	return nil
+}
+
+// Value implements the Valuer interface.
+func (lsn LSN) Value() (driver.Value, error) {
+	return driver.Value(lsn.String()), nil
 }
 
 // ParseLSN parses a LSN from a string in the XXX/XXX format.
@@ -657,7 +697,7 @@ func SendStandbyCopyDone(_ context.Context, conn *pgconn.PgConn) (cdr *CopyDoneR
 				timeline, lerr := strconv.Atoi(string(m.Values[0]))
 				if lerr == nil {
 					lsn, lerr := ParseLSN(string(m.Values[1]))
-					if lerr == nil {
+					if lerr == nil && cdr != nil {
 						cdr.Timeline = int32(timeline)
 						cdr.LSN = lsn
 					}

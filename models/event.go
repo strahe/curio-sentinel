@@ -32,12 +32,6 @@ type Event struct {
 	// Timestamp is the time when the event was generated
 	Timestamp time.Time `json:"timestamp"`
 
-	// Source is the source of the event
-	Source string `json:"source,omitempty"`
-
 	// Extra contains additional information about the event
 	Extra map[string]any `json:"extra,omitempty"`
-
-	// Checkpoint is the LSN of the event
-	Checkpoint string `json:"checkpoint,omitempty"`
 }
