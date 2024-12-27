@@ -16,7 +16,6 @@ type Processor struct {
 	typeMap   *pgtype.Map
 
 	eid    *EventIDGenerator
-	data   map[string]interface{}
 	events chan<- *models.Event
 	mu     sync.RWMutex
 }
@@ -26,7 +25,6 @@ func NewProcessor(events chan<- *models.Event) *Processor {
 		relations: map[uint32]*yblogrepl.RelationMessage{},
 		typeMap:   pgtype.NewMap(),
 		eid:       &EventIDGenerator{},
-		data:      map[string]interface{}{},
 		events:    events,
 	}
 }
@@ -54,10 +52,6 @@ func (p *Processor) Process(walData []byte) error {
 	case *yblogrepl.TypeMessage:
 	case *yblogrepl.OriginMessage:
 	case *yblogrepl.LogicalDecodingMessage:
-	case *yblogrepl.StreamStartMessageV2:
-	case *yblogrepl.StreamStopMessageV2:
-	case *yblogrepl.StreamCommitMessageV2:
-	case *yblogrepl.StreamAbortMessageV2:
 	default:
 		return fmt.Errorf("unknown message type in pgoutput stream: %T", logicalMsg)
 	}

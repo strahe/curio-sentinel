@@ -16,44 +16,37 @@ type Config struct {
 
 	Capture CaptureConfig `json:"capture" yaml:"capture" toml:"capture"`
 
-	// 处理器配置
 	Processor ProcessorConfig `json:"processor" yaml:"processor" toml:"processor"`
 
-	// 接收器配置
 	Sink SinkConfig `json:"sink" yaml:"sink" toml:"sink"`
 }
 
-type CaptureConfig struct {
-	// 连接配置
-	DSN string `json:"dsn" yaml:"dsn" toml:"dsn"`
+type DatabaseConfig struct {
+	Hosts    []string `json:"hosts" yaml:"hosts" toml:"hosts"`
+	Port     uint16   `json:"port" yaml:"port" toml:"port"`
+	Username string   `json:"username" yaml:"username" toml:"username"`
+	Password string   `json:"password" yaml:"password" toml:"password"`
+	Database string   `json:"database" yaml:"database" toml:"database"`
+}
 
-	// 复制配置
+type CaptureConfig struct {
+	// Database
+	Database DatabaseConfig `json:"database" yaml:"database" toml:"database"`
+
 	SlotName              string   `json:"slot_name" yaml:"slot_name" toml:"slot_name"`
 	PublicationName       string   `json:"publication_name" yaml:"publication_name" toml:"publication_name"`
 	Tables                []string `json:"tables" yaml:"tables" toml:"tables"`
 	DropSlotOnStop        bool     `json:"drop_slot_on_stop" yaml:"drop_slot_on_stop" toml:"drop_slot_on_stop"`
 	DropPublicationOnStop bool     `json:"drop_publication_on_stop" yaml:"drop_publication_on_stop" toml:"drop_publication_on_stop"`
-
-	// 协议配置
-	ProtocolVersion string `json:"protocol_version" yaml:"protocol_version" toml:"protocol_version"` // 1 或 2
-	EnableStreaming bool   `json:"enable_streaming" yaml:"enable_streaming" toml:"enable_streaming"`
-	EnableMessages  bool   `json:"enable_messages" yaml:"enable_messages" toml:"enable_messages"`
-
-	// 高级配置
-	HeartbeatMs int64 `json:"heartbeat_ms" yaml:"heartbeat_ms" toml:"heartbeat_ms"`
-	BufferSize  int   `json:"buffer_size" yaml:"buffer_size" toml:"buffer_size"`
 }
 
-// ProcessorConfig 定义处理器配置
 type ProcessorConfig struct {
-	// 处理器配置
 	Filter               FilterConfig    `json:"filter" yaml:"filter" toml:"filter"`
 	EnableTransformation bool            `json:"enable_transformation" yaml:"enable_transformation" toml:"enable_transformation"`
 	TransformRules       []TransformRule `json:"transform_rules" yaml:"transform_rules" toml:"transform_rules"`
 	MaxConcurrency       int             `json:"max_concurrency" yaml:"max_concurrency" toml:"max_concurrency"`
 }
 
-// FilterConfig 定义事件过滤配置
 type FilterConfig struct {
 	Types          []string `json:"types" yaml:"types" toml:"types"`
 	Schemas        []string `json:"schemas" yaml:"schemas" toml:"schemas"`
@@ -62,7 +55,6 @@ type FilterConfig struct {
 	ExcludeTables  []string `json:"exclude_tables" yaml:"exclude_tables" toml:"exclude_tables"`
 }
 
-// TransformRule 定义数据转换规则
 type TransformRule struct {
 	SchemaPattern string            `json:"schema_pattern" yaml:"schema_pattern" toml:"schema_pattern"`
 	TablePattern  string            `json:"table_pattern" yaml:"table_pattern" toml:"table_pattern"`
@@ -71,49 +63,16 @@ type TransformRule struct {
 	Parameters    map[string]string `json:"parameters" yaml:"parameters" toml:"parameters"`
 }
 
-// SinkConfig 定义接收器配置
 type SinkConfig struct {
-	// 接收器类型："kafka", "elasticsearch", "file", "database" 等
-	Type string `json:"type" yaml:"type" toml:"type"`
-
-	// 类型特定配置
-	Kafka KafkaSinkConfig `json:"kafka,omitempty" yaml:"kafka,omitempty" toml:"kafka,omitempty"`
-	File  FileSinkConfig  `json:"file,omitempty" yaml:"file,omitempty" toml:"file,omitempty"`
+	Type string         `json:"type" yaml:"type" toml:"type"`
+	File FileSinkConfig `json:"file,omitempty" yaml:"file,omitempty" toml:"file,omitempty"`
 }
 
-// KafkaSinkConfig 定义 Kafka 接收器配置
-type KafkaSinkConfig struct {
-	Brokers          []string          `json:"brokers" yaml:"brokers" toml:"brokers"`
-	Topic            string            `json:"topic" yaml:"topic" toml:"topic"`
-	KeyField         string            `json:"key_field" yaml:"key_field" toml:"key_field"`
-	Compression      string            `json:"compression" yaml:"compression" toml:"compression"` // none, gzip, snappy, lz4
-	Async            bool              `json:"async" yaml:"async" toml:"async"`
-	BatchSize        int               `json:"batch_size" yaml:"batch_size" toml:"batch_size"`
-	LingerMs         int               `json:"linger_ms" yaml:"linger_ms" toml:"linger_ms"`
-	RetryMax         int               `json:"retry_max" yaml:"retry_max" toml:"retry_max"`
-	RequiredAcks     int               `json:"required_acks" yaml:"required_acks" toml:"required_acks"`
-	Partitioner      string            `json:"partitioner" yaml:"partitioner" toml:"partitioner"`    // hash, roundrobin, manual
-	PartitionBy      string            `json:"partition_by" yaml:"partition_by" toml:"partition_by"` // schema, table
-	CheckpointTopic  string            `json:"checkpoint_topic" yaml:"checkpoint_topic" toml:"checkpoint_topic"`
-	SecurityProtocol string            `json:"security_protocol" yaml:"security_protocol" toml:"security_protocol"`
-	SASLMechanism    string            `json:"sasl_mechanism" yaml:"sasl_mechanism" toml:"sasl_mechanism"`
-	SASLUsername     string            `json:"sasl_username" yaml:"sasl_username" toml:"sasl_username"`
-	SASLPassword     string            `json:"sasl_password" yaml:"sasl_password" toml:"sasl_password"`
-	Options          map[string]string `json:"options" yaml:"options" toml:"options"`
-}
-
-// FileSinkConfig 定义文件接收器配置
 type FileSinkConfig struct {
-	Path             string `json:"path" yaml:"path" toml:"path"`
-	Format           string `json:"format" yaml:"format" toml:"format"` // json, csv, avro, etc.
-	RotationMaxBytes int64  `json:"rotation_max_bytes" yaml:"rotation_max_bytes" toml:"rotation_max_bytes"`
-	RotationMaxTime  string `json:"rotation_max_time" yaml:"rotation_max_time" toml:"rotation_max_time"` // 1h, 24h, etc.
-	Compression      string `json:"compression" yaml:"compression" toml:"compression"`                   // none, gzip, snappy
-	SyncInterval     string `json:"sync_interval" yaml:"sync_interval" toml:"sync_interval"`
-	CheckpointFile   string `json:"checkpoint_file" yaml:"checkpoint_file" toml:"checkpoint_file"`
+	Path   string `json:"path" yaml:"path" toml:"path"`
+	Format string `json:"format" yaml:"format" toml:"format"` // json, csv, avro, etc.
 }
 
-// LoadFromFile 从文件加载配置
 func LoadFromFile(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -122,7 +81,6 @@ func LoadFromFile(path string) (*Config, error) {
 
 	config := DefaultConfig
 
-	// 根据文件扩展名决定解析方式
 	switch {
 	case strings.HasSuffix(path, ".json"):
 		if err := json.Unmarshal(data, &config); err != nil {
@@ -136,7 +94,7 @@ func LoadFromFile(path string) (*Config, error) {
 		return nil, fmt.Errorf("unsupported config file format: %s", path)
 	}
 
-	// todo: validateConfig 验证配置
+	// todo: validateConfig
 
 	return &config, nil
 }
@@ -145,7 +103,5 @@ var DefaultConfig = Config{
 	AppName:  "curio-sentinel",
 	Version:  "0.1.0",
 	LogLevel: "info",
-	Capture: CaptureConfig{
-		BufferSize: 4,
-	},
+	Capture:  CaptureConfig{},
 }

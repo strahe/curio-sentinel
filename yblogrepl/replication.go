@@ -11,68 +11,50 @@ import (
 )
 
 type ReplicationSlotInfo struct {
-	// 复制槽名称
-	SlotName string `json:"slot_name"`
+	SlotName          string         `json:"slot_name"`
+	Plugin            string         `json:"plugin"`
+	SlotType          string         `json:"slot_type"`
+	DatOid            uint32         `json:"datoid"`
+	Database          string         `json:"database"`
+	Temporary         bool           `json:"temporary"`
+	Active            bool           `json:"active"`
+	ActivePID         sql.NullInt32  `json:"active_pid"`
+	Xmin              sql.NullString `json:"xmin"`
+	CatalogXmin       sql.NullString `json:"catalog_xmin"`
+	RestartLSN        LSN            `json:"restart_lsn"`
+	ConfirmedFlushLSN LSN            `json:"confirmed_flush_lsn"`
+	YBStreamID        sql.NullString `json:"yb_stream_id,omitempty"`
+	YBRestartCommitHT sql.NullInt64  `json:"yb_restart_commit_ht,omitempty"`
 
-	// 逻辑复制输出插件名称 (例如 pgoutput)
-	// 对于物理复制槽为空
-	Plugin string `json:"plugin"`
-
-	// 复制槽类型："physical" 或 "logical"
-	SlotType string `json:"slot_type"`
-
-	// 数据库OID
-	DatOid uint32 `json:"datoid"`
-
-	// 复制槽关联的数据库名称
-	Database string `json:"database"`
-
-	// 是否为临时复制槽
-	// 临时槽在会话结束或崩溃时会自动删除
-	Temporary bool `json:"temporary"`
-
-	// 复制槽当前是否活跃（有客户端连接使用）
-	Active bool `json:"active"`
-
-	// 如果活跃，当前使用此复制槽的进程ID
-	ActivePID sql.NullInt32 `json:"active_pid"`
-
-	// 复制槽要求数据库保留的最早事务ID
-	Xmin sql.NullString `json:"xmin"`
-
-	// 复制槽要求数据库保留的最早系统目录事务ID
-	CatalogXmin sql.NullString `json:"catalog_xmin"`
-
-	// 需要保留的最早WAL位置
-	// 从此位置开始的WAL都将保留，不会被回收
-	RestartLSN LSN `json:"restart_lsn"`
-
-	// 消费者确认已处理的位置
-	ConfirmedFlushLSN LSN `json:"confirmed_flush_lsn"`
-
-	// YugabyteDB特有: 流ID
-	YBStreamID sql.NullString `json:"yb_stream_id,omitempty"`
-
-	// YugabyteDB特有: 重启提交混合时间戳
-	YBRestartCommitHT sql.NullInt64 `json:"yb_restart_commit_ht,omitempty"`
-
-	// 以下是计算字段，不直接来自表
-
-	// 复制槽创建时间（需要从系统视图或事件中获取）
-	CreationTime time.Time `json:"creation_time,omitempty"`
-
-	// 复制槽最后活跃时间
-	LastActiveTime time.Time `json:"last_active_time,omitempty"`
-
-	// 复制槽已保留的WAL大小（字节）
-	RetainedWALBytes int64 `json:"retained_wal_bytes,omitempty"`
-
-	// 复制延迟（主服务器当前位置与已确认位置的时间差）
-	ReplicationLag time.Duration `json:"replication_lag,omitempty"`
+	// computed fields
+	CreationTime     time.Time     `json:"creation_time,omitempty"`
+	LastActiveTime   time.Time     `json:"last_active_time,omitempty"`
+	RetainedWALBytes int64         `json:"retained_wal_bytes,omitempty"`
+	ReplicationLag   time.Duration `json:"replication_lag,omitempty"`
 }
 
-// ListReplicationSlots 返回所有复制槽的信息
+// ListReplicationSlots returns a list of replication slots
 func ListReplicationSlots(ctx context.Context, conn *pgconn.PgConn) ([]ReplicationSlotInfo, error) {
+	return getReplicationSlot(ctx, conn, nil)
+}
+
+func GetReplicationSlot(ctx context.Context, conn *pgconn.PgConn, slotName string) (*ReplicationSlotInfo, error) {
+	slots, err := getReplicationSlot(ctx, conn, &slotName)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(slots) == 0 {
+		return nil, fmt.Errorf("replication slot %s not found", slotName)
+	}
+
+	return &slots[0], nil
+}
+
+// getReplicationSlot returns the information of a replication slot
+// if the slot name not provided, it will return the all the replication slots
+// if the slot name provided, it will return the information of the slot
+func getReplicationSlot(ctx context.Context, conn *pgconn.PgConn, slotName *string) ([]ReplicationSlotInfo, error) {
 	query := `
 		SELECT
 			slot_name,
@@ -94,6 +76,9 @@ func ListReplicationSlots(ctx context.Context, conn *pgconn.PgConn) ([]Replicati
 		FROM
 			pg_catalog.pg_replication_slots
 	`
+	if slotName != nil {
+		query += fmt.Sprintf(" WHERE slot_name = '%s'", *slotName)
+	}
 
 	result := conn.Exec(ctx, query)
 	results, err := result.ReadAll()
@@ -112,7 +97,6 @@ func ListReplicationSlots(ctx context.Context, conn *pgconn.PgConn) ([]Replicati
 		var restartLSNStr, confirmedFlushLSNStr, currentLSNStr string
 		var retainedBytes int64
 
-		// 基本字段
 		if len(row[0]) > 0 {
 			slot.SlotName = string(row[0])
 		}
@@ -138,7 +122,6 @@ func ListReplicationSlots(ctx context.Context, conn *pgconn.PgConn) ([]Replicati
 			slot.Active = string(row[6]) == "t"
 		}
 
-		// 可空字段
 		if len(row[7]) > 0 {
 			pid, err := strconv.ParseInt(string(row[7]), 10, 32)
 			if err == nil {
@@ -152,7 +135,6 @@ func ListReplicationSlots(ctx context.Context, conn *pgconn.PgConn) ([]Replicati
 			slot.CatalogXmin = sql.NullString{String: string(row[9]), Valid: true}
 		}
 
-		// LSN 字段
 		if len(row[10]) > 0 {
 			restartLSNStr = string(row[10])
 			restartLSN, err := ParseLSN(restartLSNStr)
@@ -168,7 +150,7 @@ func ListReplicationSlots(ctx context.Context, conn *pgconn.PgConn) ([]Replicati
 			}
 		}
 
-		// YugabyteDB 特有字段
+		// yb specific fields
 		if len(row[12]) > 0 {
 			slot.YBStreamID = sql.NullString{String: string(row[12]), Valid: true}
 		}
@@ -179,7 +161,7 @@ func ListReplicationSlots(ctx context.Context, conn *pgconn.PgConn) ([]Replicati
 			}
 		}
 
-		// 计算字段
+		// computed fields
 		if len(row[14]) > 0 {
 			currentLSNStr = string(row[14])
 		}
@@ -188,15 +170,11 @@ func ListReplicationSlots(ctx context.Context, conn *pgconn.PgConn) ([]Replicati
 			slot.RetainedWALBytes = retainedBytes
 		}
 
-		// 计算复制滞后
 		if currentLSNStr != "" && confirmedFlushLSNStr != "" {
 			currentLSN, err := ParseLSN(currentLSNStr)
 			if err == nil && slot.ConfirmedFlushLSN > 0 {
-				// 根据数据库负载和写入率估算延迟
-				// 这只是粗略估计，实际应用中应根据实际WAL生成率计算
 				lagBytes := int64(currentLSN - slot.ConfirmedFlushLSN)
 				if lagBytes > 0 {
-					// 假设平均每秒生成1MB WAL
 					slot.ReplicationLag = time.Duration(lagBytes/1048576) * time.Second
 				}
 			}

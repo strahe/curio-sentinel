@@ -34,4 +34,7 @@ type Event struct {
 
 	// Extra contains additional information about the event
 	Extra map[string]any `json:"extra,omitempty"`
+
+	// LSN is the Log Sequence Number of the event
+	LSN string `json:"lsn,omitempty"`
 }

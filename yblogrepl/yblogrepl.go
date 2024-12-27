@@ -697,9 +697,11 @@ func SendStandbyCopyDone(_ context.Context, conn *pgconn.PgConn) (cdr *CopyDoneR
 				timeline, lerr := strconv.Atoi(string(m.Values[0]))
 				if lerr == nil {
 					lsn, lerr := ParseLSN(string(m.Values[1]))
-					if lerr == nil && cdr != nil {
-						cdr.Timeline = int32(timeline)
-						cdr.LSN = lsn
+					if lerr == nil {
+						cdr = &CopyDoneResult{
+							Timeline: int32(timeline),
+							LSN:      lsn,
+						}
 					}
 				}
 			}

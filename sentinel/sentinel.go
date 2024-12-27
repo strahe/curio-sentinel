@@ -64,27 +64,41 @@ func NewSentinel(capturer capture.Capturer, processor processor.Processor, sink 
 	return s
 }
 
-func (s *Sentinel) Start(ctx context.Context) error {
+func (s *Sentinel) Start(ctx context.Context) (err error) {
 	s.ctx, s.cancel = context.WithCancel(ctx)
+	s.setStatus(StatusStarting)
+	defer func() {
+		if err != nil {
+			s.setStatus(StatusError)
+			s.cancel()
+		} else {
+			s.setStatus(StatusRunning)
+		}
+	}()
 
 	if err := s.Capturer.Start(); err != nil {
-		s.setStatus(StatusError)
-		s.cancel()
 		return fmt.Errorf("failed to start capturer: %w", err)
 	}
 
 	s.wg.Add(1)
 	go s.processEvents()
 
-	s.setStatus(StatusRunning)
 	return nil
 }
 
-func (s *Sentinel) Stop() error {
-	defer s.setStatus(StatusStopping)
+func (s *Sentinel) Stop() (err error) {
+	s.setStatus(StatusStopping)
+	defer func() {
+		if err == nil {
+			s.setStatus(StatusIdle)
+		} else {
+			s.setStatus(StatusError)
+		}
+	}()
 	if err := s.Capturer.Stop(); err != nil {
 		log.Error().Err(err).Msg("failed to stop capturer")
 	}
+	s.cancel()
 	s.wg.Wait()
 	return nil
 }
@@ -130,12 +144,12 @@ func (s *Sentinel) processEvents() {
 					log.Error().Err(err).Str("eventID", processedEvent.ID).Msg("Failed to write event to sink")
 				} else {
 					log.Debug().Str("eventID", processedEvent.ID).Msg("Successfully processed and wrote event")
-					s.updateLastCheckpoint(processedEvent.ID)
+					s.updateLastCheckpoint(processedEvent.LSN)
 				}
 			}
 
 		case <-checkpointTicker.C:
-			s.updateCheckpoint()
+			s.updateCheckpoint(s.ctx)
 		}
 	}
 }
@@ -146,13 +160,13 @@ func (s *Sentinel) updateLastCheckpoint(checkpoint string) {
 	s.lastCheckpoint = checkpoint
 }
 
-func (s *Sentinel) updateCheckpoint() {
+func (s *Sentinel) updateCheckpoint(ctx context.Context) {
 	s.checkpointMu.RLock()
 	checkpoint := s.lastCheckpoint
 	s.checkpointMu.RUnlock()
 
 	if checkpoint != "" {
-		if err := s.Capturer.SetCheckpoint(checkpoint); err != nil {
+		if err := s.Capturer.SetCheckpoint(ctx, checkpoint); err != nil {
 			log.Error().Err(err).Str("checkpoint", checkpoint).Msg("Failed to update checkpoint")
 		} else {
 			log.Debug().Str("checkpoint", checkpoint).Msg("Checkpoint updated")

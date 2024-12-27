@@ -87,20 +87,7 @@ var runCmd = &cli.Command{
 
 func setupCapturer(cfg *config.Config) (capture.Capturer, error) {
 	log.Info().Msgf("Setup capture")
-
-	ybConfig := capture.YugabyteConfig{
-		ConnString:            cfg.Capture.DSN,
-		SlotName:              cfg.Capture.SlotName,
-		PublicationName:       cfg.Capture.PublicationName,
-		Tables:                cfg.Capture.Tables,
-		DropSlotOnStop:        cfg.Capture.DropSlotOnStop,
-		DropPublicationOnStop: cfg.Capture.DropPublicationOnStop,
-		// EventBufferSize:       cfg.Capture.BufferSize,
-		// ProtocolVersion:       cfg.Capture.ProtocolVersion,
-		// EnableStreaming:       cfg.Capture.EnableStreaming,
-	}
-
-	return capture.NewYugabyteCapture(ybConfig), nil
+	return capture.NewYugabyteCapture(cfg.Capture), nil
 }
 
 func setupProcessor(cfg *config.Config) (processor.Processor, error) {
