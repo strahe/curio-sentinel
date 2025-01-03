@@ -112,8 +112,8 @@ func setupSink(cfg *config.Config) (sink.Sink, error) {
 	log.Info().Msgf("Setup sink")
 
 	switch cfg.Sink.Type {
-	case "debug":
-		return sink.NewDebugSink(), nil
+	case "stdout":
+		return sink.NewStdoutSink(), nil
 
 	default:
 		return nil, fmt.Errorf("unsupported sink type: %s", cfg.Sink.Type)

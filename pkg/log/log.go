@@ -43,7 +43,7 @@ func init() {
 		return fmt.Sprintf("%s=", i)
 	}
 	output.FormatFieldValue = func(i any) string {
-		return strings.ToUpper(fmt.Sprintf("%s", i))
+		return fmt.Sprintf("%s", i)
 	}
 
 	Logger = zerolog.New(output).With().Timestamp().Logger()

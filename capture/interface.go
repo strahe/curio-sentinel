@@ -14,5 +14,5 @@ type Capturer interface {
 	Events() <-chan *models.Event
 
 	Checkpoint(ctx context.Context) (string, error)
-	SetCheckpoint(ctx context.Context, checkpoint string) error
+	ACK(ctx context.Context, position string) error
 }

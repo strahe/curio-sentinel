@@ -32,9 +32,6 @@ type Sentinel struct {
 	Processor processor.Processor
 	Sink      sink.Sink
 
-	// BatchSize     int
-	// FlushInterval time.Duration
-
 	ctx    context.Context
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
@@ -54,7 +51,7 @@ func NewSentinel(capturer capture.Capturer, processor processor.Processor, sink 
 		Capturer:           capturer,
 		Processor:          processor,
 		Sink:               sink,
-		checkpointInterval: time.Minute,
+		checkpointInterval: time.Second,
 	}
 
 	for _, opt := range options {
@@ -140,10 +137,13 @@ func (s *Sentinel) processEvents() {
 			}
 
 			if processedEvent != nil {
-				if err := s.Sink.Write(s.ctx, []models.Event{*processedEvent}); err != nil {
+				if err := s.Sink.Write(s.ctx, []*models.Event{processedEvent}); err != nil {
 					log.Error().Err(err).Str("eventID", processedEvent.ID).Msg("Failed to write event to sink")
 				} else {
-					log.Debug().Str("eventID", processedEvent.ID).Msg("Successfully processed and wrote event")
+					log.Info().
+						Str("lsn", processedEvent.LSN).
+						Str("delay", time.Since(processedEvent.Timestamp).String()).
+						Msg("Processed event")
 					s.updateLastCheckpoint(processedEvent.LSN)
 				}
 			}
@@ -166,10 +166,8 @@ func (s *Sentinel) updateCheckpoint(ctx context.Context) {
 	s.checkpointMu.RUnlock()
 
 	if checkpoint != "" {
-		if err := s.Capturer.SetCheckpoint(ctx, checkpoint); err != nil {
+		if err := s.Capturer.ACK(ctx, checkpoint); err != nil {
 			log.Error().Err(err).Str("checkpoint", checkpoint).Msg("Failed to update checkpoint")
-		} else {
-			log.Debug().Str("checkpoint", checkpoint).Msg("Checkpoint updated")
 		}
 	}
 }

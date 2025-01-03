@@ -15,7 +15,7 @@ type Processor struct {
 	relations map[uint32]*yblogrepl.RelationMessage
 	typeMap   *pgtype.Map
 
-	eid    *EventIDGenerator
+	tx     *TransactionTracker
 	events chan<- *models.Event
 	mu     sync.RWMutex
 }
@@ -24,7 +24,7 @@ func NewProcessor(events chan<- *models.Event) *Processor {
 	return &Processor{
 		relations: map[uint32]*yblogrepl.RelationMessage{},
 		typeMap:   pgtype.NewMap(),
-		eid:       &EventIDGenerator{},
+		tx:        &TransactionTracker{},
 		events:    events,
 	}
 }
@@ -73,28 +73,38 @@ func (p *Processor) handleRelation(msg *yblogrepl.RelationMessage) error {
 func (p *Processor) handleBegin(msg *yblogrepl.BeginMessage) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	log.Debug().Uint32("id", msg.Xid).
-		Str("lsn", msg.FinalLSN.String()).
-		Time("timestamp", msg.CommitTime).
-		Msg("Begin transaction")
 
-	p.eid.BeginTransaction(msg.Xid, msg.FinalLSN)
+	// 判断 msg.CommitTime 是否是30秒之前的时间
+	if msg.CommitTime.Before(time.Now().Add(-30 * time.Second)) {
+		log.Warn().Uint32("id", msg.Xid).Time("time", msg.CommitTime).
+			Str("delay", time.Since(msg.CommitTime).String()).Msg("Begin transaction is too old")
+	} else {
+		log.Debug().Uint32("id", msg.Xid).
+			Str("lsn", msg.FinalLSN.String()).
+			Time("timestamp", msg.CommitTime).
+			Msg("Begin transaction")
+	}
+	p.tx.Begin(msg.Xid, msg.FinalLSN, msg.CommitTime)
 	return nil
 }
 
 func (p *Processor) handleCommit(msg *yblogrepl.CommitMessage) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	log.Debug().Uint8("flag", msg.Flags).
-		Str("lsn", msg.CommitLSN.String()).
-		Str("end lsn", msg.TransactionEndLSN.String()).
-		Time("timestamp", msg.CommitTime).
-		Msg("Commit transaction")
-	p.eid.EndTransaction()
+
+	events := p.tx.End(msg.CommitLSN, msg.TransactionEndLSN, msg.CommitTime)
+
+	log.Debug().Int("len", len(events)).Str("lsn", msg.CommitLSN.String()).Msg("Commit transaction")
+	for _, event := range events {
+		p.events <- event
+	}
 	return nil
 }
 
 func (p *Processor) handleUpdate(msg *yblogrepl.UpdateMessage) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	rel, ok := p.relations[msg.RelationID]
 	if !ok {
 		return fmt.Errorf("unknown relation id: %d", msg.RelationID)
@@ -139,21 +149,22 @@ func (p *Processor) handleUpdate(msg *yblogrepl.UpdateMessage) error {
 		}
 	}
 
-	p.events <- &models.Event{
-		ID:        p.eid.Generate(rel),
-		Type:      models.Update,
-		Schema:    rel.Namespace,
-		Table:     rel.RelationName,
-		Timestamp: time.Now(),
+	p.tx.AddEvent(&models.Event{
+		Type:   models.Update,
+		Schema: rel.Namespace,
+		Table:  rel.RelationName,
 		Data: map[string]any{
 			"before": oldValues,
 			"after":  newValues,
 		},
-	}
+	})
 	return nil
 }
 
 func (p *Processor) handleInsert(msg *yblogrepl.InsertMessage) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	rel, ok := p.relations[msg.RelationID]
 	if !ok {
 		return fmt.Errorf("unknown relation id: %d", msg.RelationID)
@@ -177,18 +188,19 @@ func (p *Processor) handleInsert(msg *yblogrepl.InsertMessage) error {
 		}
 	}
 
-	p.events <- &models.Event{
-		ID:        p.eid.Generate(rel),
-		Type:      models.Insert,
-		Schema:    rel.Namespace,
-		Table:     rel.RelationName,
-		Timestamp: time.Now(),
-		Data:      values,
-	}
+	p.tx.AddEvent(&models.Event{
+		Type:   models.Insert,
+		Schema: rel.Namespace,
+		Table:  rel.RelationName,
+		Data:   values,
+	})
 	return nil
 }
 
 func (p *Processor) handleDelete(msg *yblogrepl.DeleteMessage) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	rel, ok := p.relations[msg.RelationID]
 	if !ok {
 		return fmt.Errorf("unknown relation id: %d", msg.RelationID)
@@ -212,18 +224,16 @@ func (p *Processor) handleDelete(msg *yblogrepl.DeleteMessage) error {
 		}
 	}
 
-	p.events <- &models.Event{
-		ID:        p.eid.Generate(rel),
-		Type:      models.Delete,
-		Schema:    rel.Namespace,
-		Table:     rel.RelationName,
-		Timestamp: time.Now(),
-		Data:      values,
-	}
+	p.tx.AddEvent(&models.Event{
+		Type:   models.Delete,
+		Schema: rel.Namespace,
+		Table:  rel.RelationName,
+		Data:   values,
+	})
 	return nil
 }
 
-func decodeTextColumnData(mi *pgtype.Map, data []byte, dataType uint32) (interface{}, error) {
+func decodeTextColumnData(mi *pgtype.Map, data []byte, dataType uint32) (any, error) {
 	if dt, ok := mi.TypeForOID(dataType); ok {
 		return dt.Codec.DecodeValue(mi, dataType, pgtype.TextFormatCode, data)
 	}

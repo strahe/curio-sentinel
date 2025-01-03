@@ -28,26 +28,27 @@ type YugabyteCapture struct {
 	pubCreated  bool
 	slotCreated bool
 
-	ctx      context.Context
-	cancelFn context.CancelFunc
-	wg       sync.WaitGroup
-	running  bool
-	events   chan *models.Event
-	startLSN yblogrepl.LSN
-	mu       sync.Mutex
+	ctx        context.Context
+	cancelFn   context.CancelFunc
+	wg         sync.WaitGroup
+	running    bool
+	events     chan *models.Event
+	appliedLSN yblogrepl.LSN
+	mu         sync.Mutex
 }
 
 func NewYugabyteCapture(cfg config.CaptureConfig) Capturer {
 	if cfg.SlotName == "" {
 		cfg.SlotName = defaultSlotPrefix + time.Now().Format("20060102150405")
+		cfg.DropSlotOnStop = true
 	}
 	if cfg.PublicationName == "" {
 		cfg.PublicationName = defaultPublicPrefix + time.Now().Format("20060102150405")
+		cfg.DropPublicationOnStop = true
 	}
 	yc := &YugabyteCapture{
-		cfg:      cfg,
-		events:   make(chan *models.Event, 32), // todo: make buffer size configurable
-		startLSN: yblogrepl.LSN(0),
+		cfg:    cfg,
+		events: make(chan *models.Event, 32), // todo: make buffer size configurable
 	}
 	yc.ctx, yc.cancelFn = context.WithCancel(context.Background())
 
@@ -118,7 +119,7 @@ func (y *YugabyteCapture) startReplication(ctx context.Context) {
 	}
 	defer conn.Close(context.Background())
 
-	startLSN := y.startLSN
+	startLSN := y.appliedLSN
 
 	log.Info().Str("slot", y.cfg.SlotName).Str("lsn", startLSN.String()).Msg("starting replication")
 
@@ -134,8 +135,8 @@ func (y *YugabyteCapture) startReplication(ctx context.Context) {
 		return
 	}
 
-	standbyMessageTimeout := time.Second * 10
-	standbyTicker := time.NewTicker(standbyMessageTimeout / 2)
+	standbyMessageTimeout := time.Second * 5
+	standbyTicker := time.NewTicker(time.Second)
 	defer standbyTicker.Stop()
 	nextStandbyMessageDeadline := time.Now().Add(standbyMessageTimeout)
 	clientXLogPos := startLSN
@@ -149,7 +150,13 @@ func (y *YugabyteCapture) startReplication(ctx context.Context) {
 			return
 		case <-standbyTicker.C:
 			if time.Now().After(nextStandbyMessageDeadline) {
-				err = yblogrepl.SendStandbyStatusUpdate(context.Background(), conn, yblogrepl.StandbyStatusUpdate{WALWritePosition: clientXLogPos})
+				log.Debug().Str("recive", clientXLogPos.String()).Str("applied", y.appliedLSN.String()).Msg("sending Standby status message")
+				err = yblogrepl.SendStandbyStatusUpdate(ctx, conn, yblogrepl.StandbyStatusUpdate{
+					WALWritePosition: clientXLogPos,
+					WALFlushPosition: y.appliedLSN,
+					WALApplyPosition: y.appliedLSN,
+					ReplyRequested:   true,
+				})
 				if err != nil {
 					log.Error().Err(err).Msg("failed to send Standby status message")
 					continue
@@ -157,7 +164,7 @@ func (y *YugabyteCapture) startReplication(ctx context.Context) {
 				nextStandbyMessageDeadline = time.Now().Add(standbyMessageTimeout)
 			}
 		default:
-			receiveCtx, cancel := context.WithTimeout(ctx, time.Second)
+			receiveCtx, cancel := context.WithTimeout(ctx, time.Second*5)
 			rawMsg, err := conn.ReceiveMessage(receiveCtx)
 			cancel()
 			if err != nil {
@@ -166,43 +173,41 @@ func (y *YugabyteCapture) startReplication(ctx context.Context) {
 				}
 				log.Error().Err(err).Msg("failed to receive message")
 			}
-			if _, ok := rawMsg.(*pgproto3.ErrorResponse); ok {
-				log.Error().Msg("error response received")
-				continue
-			}
 
-			msg, ok := rawMsg.(*pgproto3.CopyData)
-			if !ok {
-				log.Debug().Msg("received non-copy data message")
-				continue
-			}
+			switch msg := rawMsg.(type) {
+			case *pgproto3.ErrorResponse:
+				log.Err(fmt.Errorf(msg.Message)).Msg("error response received")
+			case *pgproto3.ReadyForQuery:
+				log.Info().Str("status", string(rune(msg.TxStatus))).Msg("ready for query")
+			case *pgproto3.CopyData:
+				switch msg.Data[0] {
+				case yblogrepl.PrimaryKeepaliveMessageByteID:
+					pkm, err := yblogrepl.ParsePrimaryKeepaliveMessage(msg.Data[1:])
+					if err != nil {
+						log.Err(err).Msg("ParsePrimaryKeepaliveMessage failed")
+						continue
+					}
+					log.Info().Str("ServerWALEnd", pkm.ServerWALEnd.String()).Str("ServerTime", pkm.ServerTime.String()).Bool("ReplyRequested", pkm.ReplyRequested).Msg("Primary Keepalive Message")
+					if pkm.ServerWALEnd > clientXLogPos {
+						clientXLogPos = pkm.ServerWALEnd
+					}
+					if pkm.ReplyRequested {
+						nextStandbyMessageDeadline = time.Time{}
+					}
 
-			switch msg.Data[0] {
-			case yblogrepl.PrimaryKeepaliveMessageByteID:
-				pkm, err := yblogrepl.ParsePrimaryKeepaliveMessage(msg.Data[1:])
-				if err != nil {
-					log.Err(err).Msg("ParsePrimaryKeepaliveMessage failed")
-					continue
-				}
-				log.Info().Str("ServerWALEnd", pkm.ServerWALEnd.String()).Str("ServerTime", pkm.ServerTime.String()).Bool("ReplyRequested", pkm.ReplyRequested).Msg("Primary Keepalive Message")
-				if pkm.ServerWALEnd > clientXLogPos {
-					clientXLogPos = pkm.ServerWALEnd
-				}
-				if pkm.ReplyRequested {
-					nextStandbyMessageDeadline = time.Time{}
-				}
+				case yblogrepl.XLogDataByteID:
+					xld, err := yblogrepl.ParseXLogData(msg.Data[1:])
+					if err != nil {
+						log.Err(err).Msg("ParseXLogData failed")
+						continue
+					}
+					processor.Process(xld.WALData)
 
-			case yblogrepl.XLogDataByteID:
-				xld, err := yblogrepl.ParseXLogData(msg.Data[1:])
-				if err != nil {
-					log.Err(err).Msg("ParseXLogData failed")
-					continue
-				}
-
-				processor.Process(xld.WALData)
-
-				if xld.WALStart > clientXLogPos {
-					clientXLogPos = xld.WALStart
+					if xld.WALStart > clientXLogPos {
+						clientXLogPos = xld.WALStart
+					}
+				default:
+					log.Debug().Msg("recive unknown copy data")
 				}
 			default:
 				log.Debug().Msg("recive unknown msg")
@@ -231,20 +236,20 @@ func (y *YugabyteCapture) Checkpoint(ctx context.Context) (string, error) {
 	return "", fmt.Errorf("slot not found")
 }
 
-// SetCheckpoint implements Capturer.
-func (y *YugabyteCapture) SetCheckpoint(ctx context.Context, checkpoint string) error {
+// ACK implements Capturer.
+func (y *YugabyteCapture) ACK(ctx context.Context, position string) error {
 	y.mu.Lock()
 	defer y.mu.Unlock()
 
-	if y.running {
-		return fmt.Errorf("cannot set checkpoint while capture is running")
-	}
-	lsn, err := yblogrepl.ParseLSN(checkpoint)
+	lsn, err := yblogrepl.ParseLSN(position)
 	if err != nil {
 		return fmt.Errorf("failed to parse checkpoint: %w", err)
 	}
-	y.startLSN = lsn
-	log.Info().Str("checkpoint", lsn.String()).Msg("Checkpoint set for replication")
+	if lsn != y.appliedLSN {
+		y.appliedLSN = lsn
+		log.Info().Str("checkpoint", lsn.String()).Msg("Checkpoint set for replication")
+	}
+
 	return nil
 }
 
@@ -443,7 +448,7 @@ func (y *YugabyteCapture) createReplicationSlot(ctx context.Context) error {
 		}
 		slog.Info().Str("lsn", slot.ConfirmedFlushLSN.String()).Msg("Replication slot already exists")
 
-		y.startLSN = slot.ConfirmedFlushLSN
+		y.appliedLSN = slot.ConfirmedFlushLSN
 		return nil
 	}
 
@@ -468,7 +473,7 @@ func (y *YugabyteCapture) createReplicationSlot(ctx context.Context) error {
 	slog.Info().Str("lsn", result.LSN.String()).Msg("Replication slot created")
 
 	y.slotCreated = true
-	y.startLSN = result.LSN
+	y.appliedLSN = result.LSN
 
 	return nil
 }
