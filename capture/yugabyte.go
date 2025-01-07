@@ -18,20 +18,21 @@ import (
 const (
 	defaultLSNType      = "HYBRID_TIME"
 	defaultOutputPlugin = "yboutput"
-	defaultSlotPrefix   = "curio_sentinel_"
-	defaultPublicPrefix = "curio_pub_"
+	defaultSlotPrefix   = "curio_sentinel_slot_"
+	defaultPublicPrefix = "curio_sentinel_pub_"
 )
 
 type YugabyteCapture struct {
-	conn        *pgconn.PgConn
-	cfg         config.CaptureConfig
+	conn *pgconn.PgConn
+	cfg  config.CaptureConfig
+
 	pubCreated  bool
 	slotCreated bool
+	running     bool
 
 	ctx        context.Context
 	cancelFn   context.CancelFunc
 	wg         sync.WaitGroup
-	running    bool
 	events     chan *models.Event
 	appliedLSN yblogrepl.LSN
 	mu         sync.Mutex

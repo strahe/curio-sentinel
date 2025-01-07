@@ -21,7 +21,7 @@ func (s *messageSuite) R() *require.Assertions {
 	return s.Require()
 }
 
-func (s *messageSuite) Equal(e, a interface{}, args ...interface{}) {
+func (s *messageSuite) Equal(e, a any, args ...any) {
 	s.R().Equal(e, a, args...)
 }
 
