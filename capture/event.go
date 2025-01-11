@@ -1,13 +1,13 @@
-package models
+package capture
 
 import "time"
 
 type OperationType string
 
 const (
-	Insert OperationType = "INSERT"
-	Update OperationType = "UPDATE"
-	Delete OperationType = "DELETE"
+	TypeInsert OperationType = "INSERT"
+	TypeUpdate OperationType = "UPDATE"
+	TypeDelete OperationType = "DELETE"
 )
 
 type Event struct {

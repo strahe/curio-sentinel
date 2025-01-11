@@ -5,7 +5,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/strahe/curio-sentinel/models"
 	"github.com/strahe/curio-sentinel/pkg/log"
 	"github.com/strahe/curio-sentinel/yblogrepl"
 	"github.com/yugabyte/pgx/v5/pgtype"
@@ -16,11 +15,11 @@ type Processor struct {
 	typeMap   *pgtype.Map
 
 	tx     *TransactionTracker
-	events chan<- *models.Event
+	events chan<- *Event
 	mu     sync.RWMutex
 }
 
-func NewProcessor(events chan<- *models.Event) *Processor {
+func NewProcessor(events chan<- *Event) *Processor {
 	return &Processor{
 		relations: map[uint32]*yblogrepl.RelationMessage{},
 		typeMap:   pgtype.NewMap(),
@@ -149,8 +148,8 @@ func (p *Processor) handleUpdate(msg *yblogrepl.UpdateMessage) error {
 		}
 	}
 
-	p.tx.AddEvent(&models.Event{
-		Type:   models.Update,
+	p.tx.AddEvent(&Event{
+		Type:   TypeUpdate,
 		Schema: rel.Namespace,
 		Table:  rel.RelationName,
 		Data: map[string]any{
@@ -188,8 +187,8 @@ func (p *Processor) handleInsert(msg *yblogrepl.InsertMessage) error {
 		}
 	}
 
-	p.tx.AddEvent(&models.Event{
-		Type:   models.Insert,
+	p.tx.AddEvent(&Event{
+		Type:   TypeInsert,
 		Schema: rel.Namespace,
 		Table:  rel.RelationName,
 		Data:   values,
@@ -224,8 +223,8 @@ func (p *Processor) handleDelete(msg *yblogrepl.DeleteMessage) error {
 		}
 	}
 
-	p.tx.AddEvent(&models.Event{
-		Type:   models.Delete,
+	p.tx.AddEvent(&Event{
+		Type:   TypeDelete,
 		Schema: rel.Namespace,
 		Table:  rel.RelationName,
 		Data:   values,

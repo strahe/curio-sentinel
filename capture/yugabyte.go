@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/strahe/curio-sentinel/config"
-	"github.com/strahe/curio-sentinel/models"
 	"github.com/strahe/curio-sentinel/pkg/log"
 	"github.com/strahe/curio-sentinel/yblogrepl"
 	"github.com/yugabyte/pgx/v5/pgconn"
@@ -33,7 +32,7 @@ type YugabyteCapture struct {
 	ctx        context.Context
 	cancelFn   context.CancelFunc
 	wg         sync.WaitGroup
-	events     chan *models.Event
+	events     chan *Event
 	appliedLSN yblogrepl.LSN
 	mu         sync.Mutex
 }
@@ -49,7 +48,7 @@ func NewYugabyteCapture(cfg config.CaptureConfig) Capturer {
 	}
 	yc := &YugabyteCapture{
 		cfg:    cfg,
-		events: make(chan *models.Event, 32), // todo: make buffer size configurable
+		events: make(chan *Event, 32), // todo: make buffer size configurable
 	}
 	yc.ctx, yc.cancelFn = context.WithCancel(context.Background())
 
@@ -94,7 +93,7 @@ func (y *YugabyteCapture) Stop() error {
 	return nil
 }
 
-func (y *YugabyteCapture) Events() <-chan *models.Event {
+func (y *YugabyteCapture) Events() <-chan *Event {
 	return y.events
 }
 

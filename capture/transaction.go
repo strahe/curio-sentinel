@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/strahe/curio-sentinel/models"
 	"github.com/strahe/curio-sentinel/yblogrepl"
 )
 
@@ -16,7 +15,7 @@ type TransactionTracker struct {
 	commitLSN         yblogrepl.LSN
 	transactionEndLSN yblogrepl.LSN
 	commitTime        time.Time
-	pendingEvents     []*models.Event
+	pendingEvents     []*Event
 	eventCounter      int
 	mu                sync.Mutex
 }
@@ -31,7 +30,7 @@ func (t *TransactionTracker) Begin(xid uint32, lsn yblogrepl.LSN, commitTime tim
 }
 
 // End marks the end of a transaction and returns the events that were captured
-func (t *TransactionTracker) End(lsn, endLsn yblogrepl.LSN, commitTime time.Time) []*models.Event {
+func (t *TransactionTracker) End(lsn, endLsn yblogrepl.LSN, commitTime time.Time) []*Event {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -39,13 +38,13 @@ func (t *TransactionTracker) End(lsn, endLsn yblogrepl.LSN, commitTime time.Time
 
 	penddingEvents := t.pendingEvents
 
-	t.pendingEvents = make([]*models.Event, 0)
+	t.pendingEvents = make([]*Event, 0)
 	t.eventCounter = 0
 
 	return penddingEvents
 }
 
-func (t *TransactionTracker) AddEvent(event *models.Event) {
+func (t *TransactionTracker) AddEvent(event *Event) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 

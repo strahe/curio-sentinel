@@ -2,8 +2,6 @@ package capture
 
 import (
 	"context"
-
-	"github.com/strahe/curio-sentinel/models"
 )
 
 type Capturer interface {
@@ -11,7 +9,7 @@ type Capturer interface {
 
 	Stop() error
 
-	Events() <-chan *models.Event
+	Events() <-chan *Event
 
 	Checkpoint(ctx context.Context) (string, error)
 	ACK(ctx context.Context, position string) error

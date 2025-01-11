@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/strahe/curio-sentinel/models"
+	"github.com/strahe/curio-sentinel/capture"
 	"github.com/strahe/curio-sentinel/pkg/log"
 )
 
@@ -46,7 +46,7 @@ func (s *StdoutSink) Type() string {
 	return "stdout"
 }
 
-func (s *StdoutSink) Write(ctx context.Context, events []*models.Event) error {
+func (s *StdoutSink) Write(ctx context.Context, events []*capture.Event) error {
 	log.Debug().Msgf("StdoutSink Write %d events", len(events))
 
 	if len(events) == 0 {
@@ -72,7 +72,7 @@ func (s *StdoutSink) Write(ctx context.Context, events []*models.Event) error {
 	return nil
 }
 
-func (s *StdoutSink) printEvent(event *models.Event) {
+func (s *StdoutSink) printEvent(event *capture.Event) {
 	data, err := json.Marshal(event)
 	if err != nil {
 		fmt.Printf("Failed to marshal event: %v\n", err)
@@ -81,7 +81,7 @@ func (s *StdoutSink) printEvent(event *models.Event) {
 	fmt.Println(string(data))
 }
 
-func (s *StdoutSink) buildPrettyOutput(events []*models.Event) string {
+func (s *StdoutSink) buildPrettyOutput(events []*capture.Event) string {
 	var sb strings.Builder
 
 	for i, event := range events {

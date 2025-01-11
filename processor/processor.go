@@ -3,7 +3,7 @@ package processor
 import (
 	"sync"
 
-	"github.com/strahe/curio-sentinel/models"
+	"github.com/strahe/curio-sentinel/capture"
 )
 
 type ProcessorChain struct {
@@ -19,7 +19,7 @@ func NewProcessorChain() Processor {
 	}
 }
 
-func (pc *ProcessorChain) Process(event *models.Event) (*models.Event, error) {
+func (pc *ProcessorChain) Process(event *capture.Event) (*capture.Event, error) {
 	currentEvent := event
 	for _, p := range append(pc.filterProcessor, pc.transformerProcessor...) {
 		processed, err := p.Process(currentEvent)
