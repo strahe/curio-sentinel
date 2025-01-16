@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/strahe/curio-sentinel/capture"
+	"github.com/strahe/curio-sentinel/capturer"
 	"github.com/strahe/curio-sentinel/pkg/log"
 	"github.com/strahe/curio-sentinel/processor"
 	"github.com/strahe/curio-sentinel/sink"
@@ -27,7 +27,7 @@ type StatusReporter interface {
 }
 
 type Sentinel struct {
-	Capturer  capture.Capturer
+	Capturer  capturer.Capturer
 	Processor processor.Processor
 	Sink      sink.Sink
 
@@ -45,7 +45,7 @@ type Sentinel struct {
 	statusMu sync.RWMutex
 }
 
-func NewSentinel(capturer capture.Capturer, processor processor.Processor, sink sink.Sink, options ...Option) *Sentinel {
+func NewSentinel(capturer capturer.Capturer, processor processor.Processor, sink sink.Sink, options ...Option) *Sentinel {
 	s := &Sentinel{
 		Capturer:           capturer,
 		Processor:          processor,
@@ -136,7 +136,7 @@ func (s *Sentinel) processEvents() {
 			}
 
 			if processedEvent != nil {
-				if err := s.Sink.Write(s.ctx, []*capture.Event{processedEvent}); err != nil {
+				if err := s.Sink.Write(s.ctx, []*capturer.Event{processedEvent}); err != nil {
 					log.Error().Err(err).Str("eventID", processedEvent.ID).Msg("Failed to write event to sink")
 				} else {
 					log.Info().

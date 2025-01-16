@@ -7,7 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/strahe/curio-sentinel/capture"
+	"github.com/strahe/curio-sentinel/capturer"
 	"github.com/strahe/curio-sentinel/config"
 	"github.com/strahe/curio-sentinel/pkg/log"
 	"github.com/strahe/curio-sentinel/processor"
@@ -85,9 +85,9 @@ var runCmd = &cli.Command{
 	},
 }
 
-func setupCapturer(cfg *config.Config) (capture.Capturer, error) {
+func setupCapturer(cfg *config.Config) (capturer.Capturer, error) {
 	log.Info().Msgf("Setup capture")
-	return capture.NewYugabyteCapture(cfg.Capture), nil
+	return capturer.NewYugabyteCapture(cfg.Capture), nil
 }
 
 func setupProcessor(cfg *config.Config) (processor.Processor, error) {

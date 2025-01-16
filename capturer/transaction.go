@@ -1,4 +1,4 @@
-package capture
+package capturer
 
 import (
 	"fmt"

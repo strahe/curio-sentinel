@@ -1,9 +1,11 @@
 package processor
 
-import "github.com/strahe/curio-sentinel/capture"
+import (
+	"github.com/strahe/curio-sentinel/capturer"
+)
 
 type EventProcessor interface {
-	Process(event *capture.Event) (*capture.Event, error)
+	Process(event *capturer.Event) (*capturer.Event, error)
 }
 
 type ProcessorComposite interface {
