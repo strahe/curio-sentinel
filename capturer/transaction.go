@@ -38,7 +38,7 @@ func (t *TransactionTracker) End(lsn, endLsn yblogrepl.LSN, commitTime time.Time
 
 	penddingEvents := t.pendingEvents
 
-	t.pendingEvents = make([]*Event, 0)
+	t.pendingEvents = t.pendingEvents[:0]
 	t.eventCounter = 0
 
 	return penddingEvents

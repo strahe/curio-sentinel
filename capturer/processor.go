@@ -5,7 +5,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/strahe/curio-sentinel/pkg/log"
 	"github.com/strahe/curio-sentinel/yblogrepl"
 	"github.com/yugabyte/pgx/v5/pgtype"
 )
@@ -14,17 +13,19 @@ type Processor struct {
 	relations map[uint32]*yblogrepl.RelationMessage
 	typeMap   *pgtype.Map
 
+	logger Logger
 	tx     *TransactionTracker
 	events chan<- *Event
 	mu     sync.RWMutex
 }
 
-func NewProcessor(events chan<- *Event) *Processor {
+func NewProcessor(events chan<- *Event, logger Logger) *Processor {
 	return &Processor{
 		relations: map[uint32]*yblogrepl.RelationMessage{},
 		typeMap:   pgtype.NewMap(),
 		tx:        &TransactionTracker{},
 		events:    events,
+		logger:    logger,
 	}
 }
 
@@ -33,7 +34,7 @@ func (p *Processor) Process(walData []byte) error {
 	if err != nil {
 		return fmt.Errorf("parse logical replication message: %w", err)
 	}
-	log.Debug().Str("type", logicalMsg.Type().String()).Msg("Process logical replication message")
+	p.logger.Debugf("Process logical replication message: %s", logicalMsg.Type().String())
 	switch logicalMsg := logicalMsg.(type) {
 	case *yblogrepl.RelationMessage:
 		p.relations[logicalMsg.RelationID] = logicalMsg
@@ -60,10 +61,7 @@ func (p *Processor) Process(walData []byte) error {
 func (p *Processor) handleRelation(msg *yblogrepl.RelationMessage) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	log.Debug().Uint32("id", msg.RelationID).
-		Str("namespace", msg.Namespace).
-		Str("name", msg.RelationName).
-		Msg("Relation message")
+	p.logger.Debugf("Relation message: %s.%s (%d)", msg.Namespace, msg.RelationName, msg.RelationID)
 
 	p.relations[msg.RelationID] = msg
 	return nil
@@ -73,15 +71,10 @@ func (p *Processor) handleBegin(msg *yblogrepl.BeginMessage) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	// 判断 msg.CommitTime 是否是30秒之前的时间
 	if msg.CommitTime.Before(time.Now().Add(-30 * time.Second)) {
-		log.Warn().Uint32("id", msg.Xid).Time("time", msg.CommitTime).
-			Str("delay", time.Since(msg.CommitTime).String()).Msg("Begin transaction is too old")
+		p.logger.Warnf("Begin transaction is too old: %d (%s)", msg.Xid, time.Since(msg.CommitTime))
 	} else {
-		log.Debug().Uint32("id", msg.Xid).
-			Str("lsn", msg.FinalLSN.String()).
-			Time("timestamp", msg.CommitTime).
-			Msg("Begin transaction")
+		p.logger.Debugf("Begin transaction: %d (%s)", msg.Xid, time.Since(msg.CommitTime))
 	}
 	p.tx.Begin(msg.Xid, msg.FinalLSN, msg.CommitTime)
 	return nil
@@ -93,7 +86,7 @@ func (p *Processor) handleCommit(msg *yblogrepl.CommitMessage) error {
 
 	events := p.tx.End(msg.CommitLSN, msg.TransactionEndLSN, msg.CommitTime)
 
-	log.Debug().Int("len", len(events)).Str("lsn", msg.CommitLSN.String()).Msg("Commit transaction")
+	p.logger.Debugf("Commit transaction: %s", msg.CommitLSN)
 	for _, event := range events {
 		p.events <- event
 	}
@@ -108,7 +101,7 @@ func (p *Processor) handleUpdate(msg *yblogrepl.UpdateMessage) error {
 	if !ok {
 		return fmt.Errorf("unknown relation id: %d", msg.RelationID)
 	}
-	log.Debug().Str("table", fmt.Sprintf("%s.%s", rel.Namespace, rel.RelationName)).Msg("Update")
+	p.logger.Debugf("Update %s.%s", rel.Namespace, rel.RelationName)
 
 	oldValues := map[string]any{}
 	if msg.OldTuple != nil {
@@ -168,7 +161,7 @@ func (p *Processor) handleInsert(msg *yblogrepl.InsertMessage) error {
 	if !ok {
 		return fmt.Errorf("unknown relation id: %d", msg.RelationID)
 	}
-	log.Debug().Str("table", fmt.Sprintf("%s.%s", rel.Namespace, rel.RelationName)).Msg("Insert")
+	p.logger.Debugf("Insert %s.%s", rel.Namespace, rel.RelationName)
 
 	values := map[string]any{}
 	for idx, col := range msg.Tuple.Columns {
@@ -204,7 +197,7 @@ func (p *Processor) handleDelete(msg *yblogrepl.DeleteMessage) error {
 	if !ok {
 		return fmt.Errorf("unknown relation id: %d", msg.RelationID)
 	}
-	log.Debug().Str("table", fmt.Sprintf("%s.%s", rel.Namespace, rel.RelationName)).Msg("Delete")
+	p.logger.Debugf("Delete %s.%s", rel.Namespace, rel.RelationName)
 
 	values := map[string]any{}
 	for idx, col := range msg.OldTuple.Columns {

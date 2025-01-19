@@ -87,7 +87,7 @@ var runCmd = &cli.Command{
 
 func setupCapturer(cfg *config.Config) (capturer.Capturer, error) {
 	log.Info().Msgf("Setup capture")
-	return capturer.NewYugabyteCapture(cfg.Capture), nil
+	return capturer.NewYugabyteCapturer(capturer.Config(cfg.Capturer), nil), nil
 }
 
 func setupProcessor(cfg *config.Config) (processor.Processor, error) {

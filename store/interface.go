@@ -1,6 +1,8 @@
 package store
 
-import "context"
+import (
+	"context"
+)
 
 type Store interface {
 	Get(ctx context.Context, key string) ([]byte, error)
