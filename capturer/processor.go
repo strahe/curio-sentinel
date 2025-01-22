@@ -142,7 +142,7 @@ func (p *Processor) handleUpdate(msg *yblogrepl.UpdateMessage) error {
 	}
 
 	p.tx.AddEvent(&Event{
-		Type:   TypeUpdate,
+		Type:   Update,
 		Schema: rel.Namespace,
 		Table:  rel.RelationName,
 		Data: map[string]any{
@@ -181,7 +181,7 @@ func (p *Processor) handleInsert(msg *yblogrepl.InsertMessage) error {
 	}
 
 	p.tx.AddEvent(&Event{
-		Type:   TypeInsert,
+		Type:   Insert,
 		Schema: rel.Namespace,
 		Table:  rel.RelationName,
 		Data:   values,
@@ -217,7 +217,7 @@ func (p *Processor) handleDelete(msg *yblogrepl.DeleteMessage) error {
 	}
 
 	p.tx.AddEvent(&Event{
-		Type:   TypeDelete,
+		Type:   Delete,
 		Schema: rel.Namespace,
 		Table:  rel.RelationName,
 		Data:   values,
