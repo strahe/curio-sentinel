@@ -32,7 +32,14 @@ func CreatePublication(ctx context.Context, conn *pgconn.PgConn, params Publicat
 	} else if len(params.Tables) > 0 {
 		tableNames := make([]string, len(params.Tables))
 		for i, table := range params.Tables {
-			tableNames[i] = pq.QuoteIdentifier(table)
+			if strings.Contains(table, ".") {
+				parts := strings.SplitN(table, ".", 2)
+				schema := pq.QuoteIdentifier(parts[0])
+				tableName := pq.QuoteIdentifier(parts[1])
+				tableNames[i] = schema + "." + tableName
+			} else {
+				tableNames[i] = pq.QuoteIdentifier(table)
+			}
 		}
 		query += "FOR TABLE " + strings.Join(tableNames, ", ") + " "
 	}
