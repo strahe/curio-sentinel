@@ -7,7 +7,8 @@ require (
 	github.com/jackc/pgio v1.0.0
 	github.com/lib/pq v1.10.9
 	github.com/rs/zerolog v1.33.0
-	github.com/stretchr/testify v1.9.0
+	github.com/samber/lo v1.49.1
+	github.com/stretchr/testify v1.10.0
 	github.com/urfave/cli/v3 v3.0.0-beta1
 	github.com/yugabyte/pgx/v5 v5.5.3-yb-5
 )

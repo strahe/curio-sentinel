@@ -147,7 +147,7 @@ func (y *YugabyteCapture) startReplication(ctx context.Context) {
 	nextStandbyMessageDeadline := time.Now().Add(standbyMessageTimeout)
 	clientXLogPos := startLSN
 
-	processor := NewProcessor(y.events, y.logger)
+	processor := NewProcessor(y.events, y.logger, conn)
 
 	for {
 		select {
@@ -207,7 +207,7 @@ func (y *YugabyteCapture) startReplication(ctx context.Context) {
 						y.logger.Errorf("ParseXLogData failed: %v", err)
 						continue
 					}
-					processor.Process(xld.WALData)
+					processor.Process(ctx, xld.WALData)
 
 					if xld.WALStart > clientXLogPos {
 						clientXLogPos = xld.WALStart

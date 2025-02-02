@@ -93,20 +93,23 @@ func (s *StdoutSink) buildPrettyOutput(events []*capturer.Event) string {
 		sb.WriteString(fmt.Sprintf("Event ID: %s\n", event.ID))
 		sb.WriteString(fmt.Sprintf("Operation: %s\n", event.Type))
 		sb.WriteString(fmt.Sprintf("Table: %s.%s\n", event.Schema, event.Table))
+		sb.WriteString("PrimaryKey: \n")
+		pkBytes, _ := json.MarshalIndent(event.PrimaryKey, "  ", "  ")
+		sb.WriteString(string(pkBytes))
+		sb.WriteString("\n")
 		sb.WriteString(fmt.Sprintf("Timestamp: %s\n", event.Timestamp.Format(time.RFC3339)))
-
 		if event.LSN != "" {
 			sb.WriteString(fmt.Sprintf("LSN: %s\n", event.LSN))
 		}
 
-		sb.WriteString("Data:\n")
-		dataBytes, _ := json.MarshalIndent(event.Data, "  ", "  ")
+		sb.WriteString("Before:\n")
+		dataBytes, _ := json.MarshalIndent(event.Before, "  ", "  ")
 		sb.WriteString(string(dataBytes))
 		sb.WriteString("\n")
 
-		if len(event.Extra) > 0 {
+		if len(event.Metadata) > 0 {
 			sb.WriteString("Extra:\n")
-			extraBytes, _ := json.MarshalIndent(event.Extra, "  ", "  ")
+			extraBytes, _ := json.MarshalIndent(event.Metadata, "  ", "  ")
 			sb.WriteString(string(extraBytes))
 			sb.WriteString("\n")
 		}

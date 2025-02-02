@@ -23,17 +23,26 @@ type Event struct {
 	// Table is the name of the table
 	Table string `json:"table,omitempty"`
 
-	// Data contains the row values based on operation type:
-	// - INSERT: new row values
-	// - DELETE: values of the deleted row
-	// - UPDATE: contains both old and new values of the updated row
-	Data map[string]any `json:"data"`
+	// PrimaryKey is the primary key of the row, used to uniquely identify a row
+	PrimaryKey map[string]any `json:"primary_key,omitempty"`
 
-	// Timestamp is the time when the event was generated
+	// Before contains the row values before the operation
+	// - UPDATE: contains old values of the updated row
+	// - DELETE: contains values of the deleted row
+	// - INSERT: will be nil/empty
+	Before map[string]any `json:"before,omitempty"`
+
+	// After contains the row values after the operation
+	// - INSERT: contains new row values
+	// - UPDATE: contains new values of the updated row
+	// - DELETE: will be nil/empty
+	After map[string]any `json:"after,omitempty"`
+
+	// Timestamp is the time when the event occurred
 	Timestamp time.Time `json:"timestamp"`
 
-	// Extra contains additional information about the event
-	Extra map[string]any `json:"extra,omitempty"`
+	// Metadata contains additional information about the event
+	Metadata map[string]any `json:"extra,omitempty"`
 
 	// LSN is the Log Sequence Number of the event
 	LSN string `json:"lsn,omitempty"`

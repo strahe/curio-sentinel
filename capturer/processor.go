@@ -1,35 +1,45 @@
 package capturer
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
 
+	"github.com/samber/lo"
 	"github.com/strahe/curio-sentinel/yblogrepl"
+	"github.com/yugabyte/pgx/v5/pgconn"
 	"github.com/yugabyte/pgx/v5/pgtype"
 )
 
+type RelationWithPK struct {
+	*yblogrepl.RelationMessage
+	PKColumns []string // primary key columns
+}
+
 type Processor struct {
-	relations map[uint32]*yblogrepl.RelationMessage
+	relations map[uint32]*RelationWithPK
 	typeMap   *pgtype.Map
 
 	logger Logger
 	tx     *TransactionTracker
 	events chan<- *Event
+	conn   *pgconn.PgConn
 	mu     sync.RWMutex
 }
 
-func NewProcessor(events chan<- *Event, logger Logger) *Processor {
+func NewProcessor(events chan<- *Event, logger Logger, conn *pgconn.PgConn) *Processor {
 	return &Processor{
-		relations: map[uint32]*yblogrepl.RelationMessage{},
+		relations: map[uint32]*RelationWithPK{},
 		typeMap:   pgtype.NewMap(),
 		tx:        &TransactionTracker{},
 		events:    events,
 		logger:    logger,
+		conn:      conn,
 	}
 }
 
-func (p *Processor) Process(walData []byte) error {
+func (p *Processor) Process(ctx context.Context, walData []byte) error {
 	logicalMsg, err := yblogrepl.Parse(walData)
 	if err != nil {
 		return fmt.Errorf("parse logical replication message: %w", err)
@@ -37,7 +47,7 @@ func (p *Processor) Process(walData []byte) error {
 	p.logger.Debugf("Process logical replication message: %s", logicalMsg.Type().String())
 	switch logicalMsg := logicalMsg.(type) {
 	case *yblogrepl.RelationMessage:
-		p.relations[logicalMsg.RelationID] = logicalMsg
+		return p.handleRelation(ctx, logicalMsg)
 	case *yblogrepl.BeginMessage:
 		return p.handleBegin(logicalMsg)
 	case *yblogrepl.CommitMessage:
@@ -58,12 +68,29 @@ func (p *Processor) Process(walData []byte) error {
 	return nil
 }
 
-func (p *Processor) handleRelation(msg *yblogrepl.RelationMessage) error {
+func (p *Processor) handleRelation(ctx context.Context, msg *yblogrepl.RelationMessage) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+
 	p.logger.Debugf("Relation message: %s.%s (%d)", msg.Namespace, msg.RelationName, msg.RelationID)
 
-	p.relations[msg.RelationID] = msg
+	rp := RelationWithPK{
+		RelationMessage: msg,
+	}
+
+	pks, err := p.findPkColumns(ctx, &rp)
+	if err != nil {
+		return fmt.Errorf("find primary key columns: %w", err)
+	}
+	fmt.Println("pk", pks)
+
+	for _, col := range msg.Columns {
+		if col.Flags == 1 { // Primary key
+			rp.PKColumns = append(rp.PKColumns, col.Name)
+		}
+	}
+
+	p.relations[msg.RelationID] = &rp
 	return nil
 }
 
@@ -103,13 +130,21 @@ func (p *Processor) handleUpdate(msg *yblogrepl.UpdateMessage) error {
 	}
 	p.logger.Debugf("Update %s.%s", rel.Namespace, rel.RelationName)
 
-	oldValues := map[string]any{}
+	evt := &Event{
+		Type:       Update,
+		Schema:     rel.Namespace,
+		Table:      rel.RelationName,
+		Before:     map[string]any{},
+		After:      map[string]any{},
+		PrimaryKey: map[string]any{},
+	}
+
 	if msg.OldTuple != nil {
 		for idx, col := range msg.OldTuple.Columns {
 			colName := rel.Columns[idx].Name
 			switch col.DataType {
 			case 'n': // null
-				oldValues[colName] = nil
+				evt.Before[colName] = nil
 			case 'u': // unchanged toast
 				// This TOAST value was not changed. TOAST values are not stored in the tuple, and logical replication doesn't want to spend a disk read to fetch its value for you.
 			case 't': //text
@@ -117,18 +152,20 @@ func (p *Processor) handleUpdate(msg *yblogrepl.UpdateMessage) error {
 				if err != nil {
 					return fmt.Errorf("error decoding column data: %s", err)
 				}
-				oldValues[colName] = val
+				evt.Before[colName] = val
+			}
+			if lo.Contains(rel.PKColumns, colName) {
+				evt.PrimaryKey[colName] = evt.Before[colName]
 			}
 		}
 	}
 
-	newValues := map[string]any{}
 	if msg.NewTuple != nil {
 		for idx, col := range msg.NewTuple.Columns {
 			colName := rel.Columns[idx].Name
 			switch col.DataType {
 			case 'n': // null
-				newValues[colName] = nil
+				evt.After[colName] = nil
 			case 'u': // unchanged toast
 				// This TOAST value was not changed. TOAST values are not stored in the tuple, and logical replication doesn't want to spend a disk read to fetch its value for you.
 			case 't': //text
@@ -136,20 +173,12 @@ func (p *Processor) handleUpdate(msg *yblogrepl.UpdateMessage) error {
 				if err != nil {
 					return fmt.Errorf("error decoding column data: %s", err)
 				}
-				newValues[colName] = val
+				evt.After[colName] = val
 			}
 		}
 	}
 
-	p.tx.AddEvent(&Event{
-		Type:   Update,
-		Schema: rel.Namespace,
-		Table:  rel.RelationName,
-		Data: map[string]any{
-			"before": oldValues,
-			"after":  newValues,
-		},
-	})
+	p.tx.AddEvent(evt)
 	return nil
 }
 
@@ -163,12 +192,19 @@ func (p *Processor) handleInsert(msg *yblogrepl.InsertMessage) error {
 	}
 	p.logger.Debugf("Insert %s.%s", rel.Namespace, rel.RelationName)
 
-	values := map[string]any{}
+	evt := &Event{
+		Type:       Insert,
+		Schema:     rel.Namespace,
+		Table:      rel.RelationName,
+		After:      map[string]any{},
+		PrimaryKey: map[string]any{},
+	}
+
 	for idx, col := range msg.Tuple.Columns {
 		colName := rel.Columns[idx].Name
 		switch col.DataType {
 		case 'n': // null
-			values[colName] = nil
+			evt.After[colName] = nil
 		case 'u': // unchanged toast
 			// This TOAST value was not changed. TOAST values are not stored in the tuple, and logical replication doesn't want to spend a disk read to fetch its value for you.
 		case 't': //text
@@ -176,16 +212,14 @@ func (p *Processor) handleInsert(msg *yblogrepl.InsertMessage) error {
 			if err != nil {
 				return fmt.Errorf("error decoding column data: %s", err)
 			}
-			values[colName] = val
+			evt.After[colName] = val
+		}
+		if lo.Contains(rel.PKColumns, colName) {
+			evt.PrimaryKey[colName] = evt.After[colName]
 		}
 	}
 
-	p.tx.AddEvent(&Event{
-		Type:   Insert,
-		Schema: rel.Namespace,
-		Table:  rel.RelationName,
-		Data:   values,
-	})
+	p.tx.AddEvent(evt)
 	return nil
 }
 
@@ -199,12 +233,18 @@ func (p *Processor) handleDelete(msg *yblogrepl.DeleteMessage) error {
 	}
 	p.logger.Debugf("Delete %s.%s", rel.Namespace, rel.RelationName)
 
-	values := map[string]any{}
+	evt := &Event{
+		Type:       Delete,
+		Schema:     rel.Namespace,
+		Table:      rel.RelationName,
+		Before:     map[string]any{},
+		PrimaryKey: map[string]any{},
+	}
 	for idx, col := range msg.OldTuple.Columns {
 		colName := rel.Columns[idx].Name
 		switch col.DataType {
 		case 'n': // null
-			values[colName] = nil
+			evt.Before[colName] = nil
 		case 'u': // unchanged toast
 			// This TOAST value was not changed. TOAST values are not stored in the tuple, and logical replication doesn't want to spend a disk read to fetch its value for you.
 		case 't': //text
@@ -212,17 +252,72 @@ func (p *Processor) handleDelete(msg *yblogrepl.DeleteMessage) error {
 			if err != nil {
 				return fmt.Errorf("error decoding column data: %s", err)
 			}
-			values[colName] = val
+			evt.Before[colName] = val
+		}
+		if lo.Contains(rel.PKColumns, colName) {
+			evt.PrimaryKey[colName] = evt.Before[colName]
 		}
 	}
 
-	p.tx.AddEvent(&Event{
-		Type:   Delete,
-		Schema: rel.Namespace,
-		Table:  rel.RelationName,
-		Data:   values,
-	})
+	p.tx.AddEvent(evt)
 	return nil
+}
+
+func (p *Processor) findPkColumns(ctx context.Context, rel *RelationWithPK) ([]string, error) {
+	// Return already fetched PK columns if available
+	if len(rel.PKColumns) > 0 {
+		return rel.PKColumns, nil
+	}
+
+	// If no context provided, create one with timeout
+	if ctx == nil {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+	}
+
+	// SQL query to find primary key columns in proper order
+	query := `
+    SELECT
+        a.attname as column_name
+    FROM
+        pg_index i
+    JOIN
+        pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
+    JOIN
+        pg_class c ON c.oid = i.indrelid
+    JOIN
+        pg_namespace ns ON ns.oid = c.relnamespace
+    WHERE
+        ns.nspname = $1
+        AND c.relname = $2
+        AND i.indisprimary
+    ORDER BY
+        array_position(i.indkey, a.attnum)
+    `
+
+	paramValues := [][]byte{
+		[]byte(rel.Namespace),
+		[]byte(rel.RelationName),
+	}
+
+	resultReader := p.conn.ExecParams(ctx, query, paramValues, nil, nil, nil)
+	defer resultReader.Close()
+
+	var pkColumns []string
+
+	for resultReader.NextRow() {
+		values := resultReader.Values()
+		if len(values) == 4 && values[3] != nil {
+			pkColumns = append(pkColumns, string(values[3]))
+		}
+	}
+
+	if len(pkColumns) > 0 {
+		rel.PKColumns = pkColumns
+	}
+
+	return pkColumns, nil
 }
 
 func decodeTextColumnData(mi *pgtype.Map, data []byte, dataType uint32) (any, error) {
