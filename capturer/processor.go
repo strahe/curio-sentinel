@@ -82,13 +82,7 @@ func (p *Processor) handleRelation(ctx context.Context, msg *yblogrepl.RelationM
 	if err != nil {
 		return fmt.Errorf("find primary key columns: %w", err)
 	}
-	fmt.Println("pk", pks)
-
-	for _, col := range msg.Columns {
-		if col.Flags == 1 { // Primary key
-			rp.PKColumns = append(rp.PKColumns, col.Name)
-		}
-	}
+	rp.PKColumns = pks
 
 	p.relations[msg.RelationID] = &rp
 	return nil
@@ -308,6 +302,7 @@ func (p *Processor) findPkColumns(ctx context.Context, rel *RelationWithPK) ([]s
 
 	for resultReader.NextRow() {
 		values := resultReader.Values()
+		fmt.Println("values", values, len(values))
 		if len(values) == 4 && values[3] != nil {
 			pkColumns = append(pkColumns, string(values[3]))
 		}

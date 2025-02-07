@@ -41,7 +41,6 @@ var runCmd = &cli.Command{
 		sigChan := make(chan os.Signal, 1)
 		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-		// 初始化捕获器，例如YugabyteDB捕获器
 		capturer, err := setupCapturer(cfg)
 		if err != nil {
 			log.Fatal().Err(err).Msg("Failed to setup capturer")
@@ -57,7 +56,6 @@ var runCmd = &cli.Command{
 			log.Fatal().Err(err).Msg("Failed to setup sink")
 		}
 
-		// 创建Sentinel实例
 		sentinelSystem := sentinel.NewSentinel(
 			capturer,
 			proc,
@@ -87,7 +85,7 @@ var runCmd = &cli.Command{
 
 func setupCapturer(cfg *config.Config) (capturer.Capturer, error) {
 	log.Info().Msgf("Setup capture")
-	return capturer.NewYugabyteCapturer(capturer.Config(cfg.Capturer), nil), nil
+	return capturer.NewYugabyteCapturer(capturer.Config(cfg.Capturer), log.NewZerologAdapter(log.Logger)), nil
 }
 
 func setupProcessor(cfg *config.Config) (processor.Processor, error) {
@@ -95,13 +93,11 @@ func setupProcessor(cfg *config.Config) (processor.Processor, error) {
 
 	processor := processor.NewProcessorChain()
 
-	// 添加过滤处理器
 	if len(cfg.Processor.Filter.Types) > 0 || len(cfg.Processor.Filter.Schemas) > 0 || len(cfg.Processor.Filter.Tables) > 0 {
-		// todo: 添加过滤处理器
+		// todo: Add filter
 		processor.AddFilter(filter.NewDebugFilter())
 	}
 
-	// 添加转换处理器
 	if cfg.Processor.EnableTransformation {
 		processor.AddTransformer(transformer.NewDebugTransformer())
 	}

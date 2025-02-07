@@ -216,7 +216,7 @@ func (y *YugabyteCapture) startReplication(ctx context.Context) {
 					y.logger.Debugf("recive unknown copy data")
 				}
 			default:
-				y.logger.Debugf("recive unknown msg")
+				y.logger.Debugf("recive unknown msg type: %T", msg)
 			}
 		}
 	}
