@@ -147,7 +147,7 @@ func (y *YugabyteCapture) startReplication(ctx context.Context) {
 	nextStandbyMessageDeadline := time.Now().Add(standbyMessageTimeout)
 	clientXLogPos := startLSN
 
-	processor := NewProcessor(y.events, y.logger, conn)
+	processor := NewProcessor(y.events, y.logger, y.conn)
 
 	for {
 		select {
@@ -180,6 +180,7 @@ func (y *YugabyteCapture) startReplication(ctx context.Context) {
 				y.logger.Errorf("failed to receive message: %v", err)
 			}
 
+			<-time.After(time.Second)
 			switch msg := rawMsg.(type) {
 			case *pgproto3.ErrorResponse:
 				y.logger.Errorf("error response received: %v", msg.Message)
@@ -207,7 +208,9 @@ func (y *YugabyteCapture) startReplication(ctx context.Context) {
 						y.logger.Errorf("ParseXLogData failed: %v", err)
 						continue
 					}
-					processor.Process(ctx, xld.WALData)
+					if err := processor.Process(ctx, xld.WALData); err != nil {
+						y.logger.Errorf("failed to process WAL data: %v", err)
+					}
 
 					if xld.WALStart > clientXLogPos {
 						clientXLogPos = xld.WALStart

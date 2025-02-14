@@ -15,7 +15,7 @@ type Config struct {
 	Version  string `json:"version" yaml:"version" toml:"version"`
 	LogLevel string `json:"log_level" yaml:"log_level" toml:"log_level"`
 
-	Capturer  CapturerConfig  `json:"capture" yaml:"capture" toml:"capture"`
+	Capturer  CapturerConfig  `json:"capturer" yaml:"capturer" toml:"capturer"`
 	Processor ProcessorConfig `json:"processor" yaml:"processor" toml:"processor"`
 	Sink      SinkConfig      `json:"sink" yaml:"sink" toml:"sink"`
 }

@@ -44,6 +44,7 @@ func (p *Processor) Process(ctx context.Context, walData []byte) error {
 	if err != nil {
 		return fmt.Errorf("parse logical replication message: %w", err)
 	}
+
 	p.logger.Debugf("Process logical replication message: %s", logicalMsg.Type().String())
 	switch logicalMsg := logicalMsg.(type) {
 	case *yblogrepl.RelationMessage:
@@ -84,6 +85,7 @@ func (p *Processor) handleRelation(ctx context.Context, msg *yblogrepl.RelationM
 	}
 	rp.PKColumns = pks
 
+	p.logger.Debugf("%s.%s Primary key columns: %v", msg.Namespace, msg.RelationName, rp.PKColumns)
 	p.relations[msg.RelationID] = &rp
 	return nil
 }
@@ -272,22 +274,16 @@ func (p *Processor) findPkColumns(ctx context.Context, rel *RelationWithPK) ([]s
 
 	// SQL query to find primary key columns in proper order
 	query := `
-    SELECT
-        a.attname as column_name
-    FROM
-        pg_index i
-    JOIN
-        pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
-    JOIN
-        pg_class c ON c.oid = i.indrelid
-    JOIN
-        pg_namespace ns ON ns.oid = c.relnamespace
-    WHERE
-        ns.nspname = $1
-        AND c.relname = $2
-        AND i.indisprimary
-    ORDER BY
-        array_position(i.indkey, a.attnum)
+SELECT
+    a.attname AS column_name
+FROM
+    pg_index i
+JOIN
+    pg_attribute a ON a.attrelid = i.indrelid
+    AND a.attnum = ANY(i.indkey)
+WHERE
+    i.indrelid = ($1 || '.' || $2)::regclass
+    AND i.indisprimary;
     `
 
 	paramValues := [][]byte{
@@ -300,13 +296,21 @@ func (p *Processor) findPkColumns(ctx context.Context, rel *RelationWithPK) ([]s
 
 	var pkColumns []string
 
-	for resultReader.NextRow() {
-		values := resultReader.Values()
-		fmt.Println("values", values, len(values))
-		if len(values) == 4 && values[3] != nil {
-			pkColumns = append(pkColumns, string(values[3]))
-		}
+	result := resultReader.Read()
+
+	if result.Err != nil {
+		return nil, fmt.Errorf("failed to read result: %w", result.Err)
 	}
+
+	for _, row := range result.Rows {
+		if len(row) != 1 {
+			return nil, fmt.Errorf("expected 1 column in result, got %d", len(row))
+		}
+		fmt.Println("1111111111111111111111", string(row[0]))
+		pkColumns = append(pkColumns, string(row[0]))
+	}
+
+	fmt.Println("pkColumns", pkColumns)
 
 	if len(pkColumns) > 0 {
 		rel.PKColumns = pkColumns

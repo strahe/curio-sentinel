@@ -94,7 +94,7 @@ func (s *StdoutSink) buildPrettyOutput(events []*capturer.Event) string {
 		sb.WriteString(fmt.Sprintf("Operation: %s\n", event.Type))
 		sb.WriteString(fmt.Sprintf("Table: %s.%s\n", event.Schema, event.Table))
 		sb.WriteString("PrimaryKey: \n")
-		pkBytes, _ := json.MarshalIndent(event.PrimaryKey, "  ", "  ")
+		pkBytes, _ := json.MarshalIndent(event.PrimaryKey, "", "  ")
 		sb.WriteString(string(pkBytes))
 		sb.WriteString("\n")
 		sb.WriteString(fmt.Sprintf("Timestamp: %s\n", event.Timestamp.Format(time.RFC3339)))
