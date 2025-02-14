@@ -1,167 +1,115 @@
 package log
 
 import (
-	"context"
-	"fmt"
 	"io"
 	"os"
-	"strings"
+	"path/filepath"
+	"runtime"
+	"strconv"
 
 	"github.com/rs/zerolog"
 )
 
-// Logger is the global logger.
-var Logger = zerolog.New(os.Stderr).With().Timestamp().Logger()
+type ZeroLogger struct {
+	logger zerolog.Logger
+	name   string
+}
 
 func init() {
-
-	output := zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: "2006-01-02T15:04:05"}
-
-	output.FormatLevel = func(i any) string {
-		level := strings.ToLower(fmt.Sprintf("%s", i))
-		switch level {
-		case "debug":
-			return "\x1b[36m| " + strings.ToUpper(level) + " |\x1b[0m" // Cyan
-		case "info":
-			return "\x1b[32m| " + strings.ToUpper(level) + " |\x1b[0m" // Green
-		case "warn":
-			return "\x1b[33m| " + strings.ToUpper(level) + " |\x1b[0m" // Yellow
-		case "error":
-			return "\x1b[31m| " + strings.ToUpper(level) + " |\x1b[0m" // Red
-		case "fatal":
-			return "\x1b[35m| " + strings.ToUpper(level) + " |\x1b[0m" // Magenta
-		case "panic":
-			return "\x1b[41m| " + strings.ToUpper(level) + " |\x1b[0m" // Red background
-		default:
-			return "\x1b[37m| " + strings.ToUpper(level) + " |\x1b[0m" // White
-		}
-	}
-	output.FormatMessage = func(i any) string {
-		return fmt.Sprintf("%s: ", i)
-	}
-	output.FormatFieldName = func(i any) string {
-		return fmt.Sprintf("%s=", i)
-	}
-	output.FormatFieldValue = func(i any) string {
-		return fmt.Sprintf("%s", i)
+	// Configure zerolog
+	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
+	zerolog.CallerMarshalFunc = func(pc uintptr, file string, line int) string {
+		return filepath.Base(file) + ":" + strconv.Itoa(line)
 	}
 
-	Logger = zerolog.New(output).With().Timestamp().Logger()
+	// Set default to console writer for more readable logs during development
+	log := zerolog.New(os.Stdout).With().Timestamp().Logger()
+	zerolog.DefaultContextLogger = &log
 }
 
-// Output duplicates the global logger and sets w as its output.
-func Output(w io.Writer) zerolog.Logger {
-	return Logger.Output(w)
+func SetGlobalLevel(level zerolog.Level) {
+	zerolog.SetGlobalLevel(level)
 }
 
-// With creates a child logger with the field added to its context.
-func With() zerolog.Context {
-	return Logger.With()
+func NewLogger(name string, output io.Writer) *ZeroLogger {
+	if output == nil {
+		output = os.Stdout
+	}
+
+	// Create logger with caller information
+	logger := zerolog.New(output).
+		With().
+		Timestamp().
+		Str("logger", name).
+		Caller(). // Enable file:line in logs
+		Logger()
+
+	return &ZeroLogger{
+		logger: logger,
+		name:   name,
+	}
 }
 
-// Level creates a child logger with the minimum accepted level set to level.
-func Level(level zerolog.Level) zerolog.Logger {
-	return Logger.Level(level)
+func (l *ZeroLogger) Debugf(format string, args ...any) {
+	l.logger.Debug().Msgf(format, args...)
 }
 
-// Sample returns a logger with the s sampler.
-func Sample(s zerolog.Sampler) zerolog.Logger {
-	return Logger.Sample(s)
+func (l *ZeroLogger) Infof(format string, args ...any) {
+	l.logger.Info().Msgf(format, args...)
 }
 
-// Hook returns a logger with the h Hook.
-func Hook(h zerolog.Hook) zerolog.Logger {
-	return Logger.Hook(h)
+func (l *ZeroLogger) Warnf(format string, args ...any) {
+	l.logger.Warn().Msgf(format, args...)
 }
 
-// Err starts a new message with error level with err as a field if not nil or
-// with info level if err is nil.
-//
-// You must call Msg on the returned event in order to send the event.
-func Err(err error) *zerolog.Event {
-	return Logger.Err(err)
+func (l *ZeroLogger) Errorf(format string, args ...any) {
+	l.logger.Error().Msgf(format, args...)
 }
 
-// Trace starts a new message with trace level.
-//
-// You must call Msg on the returned event in order to send the event.
-func Trace() *zerolog.Event {
-	return Logger.Trace()
+var defaultLogger = NewLogger("default", nil)
+
+func Debugf(format string, args ...any) {
+	_, file, line, ok := runtime.Caller(1)
+	event := defaultLogger.logger.Debug()
+	if ok {
+		event = event.Str("caller", filepath.Base(file)+":"+strconv.Itoa(line))
+	}
+	event.Msgf(format, args...)
 }
 
-// Debug starts a new message with debug level.
-//
-// You must call Msg on the returned event in order to send the event.
-func Debug() *zerolog.Event {
-	return Logger.Debug()
+func Infof(format string, args ...any) {
+	_, file, line, ok := runtime.Caller(1)
+	event := defaultLogger.logger.Info()
+	if ok {
+		event = event.Str("caller", filepath.Base(file)+":"+strconv.Itoa(line))
+	}
+	event.Msgf(format, args...)
 }
 
-// Info starts a new message with info level.
-//
-// You must call Msg on the returned event in order to send the event.
-func Info() *zerolog.Event {
-	return Logger.Info()
+func Warnf(format string, args ...any) {
+	_, file, line, ok := runtime.Caller(1)
+	event := defaultLogger.logger.Warn()
+	if ok {
+		event = event.Str("caller", filepath.Base(file)+":"+strconv.Itoa(line))
+	}
+	event.Msgf(format, args...)
 }
 
-// Warn starts a new message with warn level.
-//
-// You must call Msg on the returned event in order to send the event.
-func Warn() *zerolog.Event {
-	return Logger.Warn()
+func Errorf(format string, args ...any) {
+	_, file, line, ok := runtime.Caller(1)
+	event := defaultLogger.logger.Error()
+	if ok {
+		event = event.Str("caller", filepath.Base(file)+":"+strconv.Itoa(line))
+	}
+	event.Msgf(format, args...)
 }
 
-// Error starts a new message with error level.
-//
-// You must call Msg on the returned event in order to send the event.
-func Error() *zerolog.Event {
-	return Logger.Error()
-}
-
-// Fatal starts a new message with fatal level. The os.Exit(1) function
-// is called by the Msg method.
-//
-// You must call Msg on the returned event in order to send the event.
-func Fatal() *zerolog.Event {
-	return Logger.Fatal()
-}
-
-// Panic starts a new message with panic level. The message is also sent
-// to the panic function.
-//
-// You must call Msg on the returned event in order to send the event.
-func Panic() *zerolog.Event {
-	return Logger.Panic()
-}
-
-// WithLevel starts a new message with level.
-//
-// You must call Msg on the returned event in order to send the event.
-func WithLevel(level zerolog.Level) *zerolog.Event {
-	return Logger.WithLevel(level)
-}
-
-// Log starts a new message with no level. Setting zerolog.GlobalLevel to
-// zerolog.Disabled will still disable events produced by this method.
-//
-// You must call Msg on the returned event in order to send the event.
-func Log() *zerolog.Event {
-	return Logger.Log()
-}
-
-// Print sends a log event using debug level and no extra field.
-// Arguments are handled in the manner of fmt.Print.
-func Print(v ...any) {
-	Logger.Debug().CallerSkipFrame(1).Msg(fmt.Sprint(v...))
-}
-
-// Printf sends a log event using debug level and no extra field.
-// Arguments are handled in the manner of fmt.Printf.
-func Printf(format string, v ...any) {
-	Logger.Debug().CallerSkipFrame(1).Msgf(format, v...)
-}
-
-// Ctx returns the Logger associated with the ctx. If no logger
-// is associated, a disabled logger is returned.
-func Ctx(ctx context.Context) *zerolog.Logger {
-	return zerolog.Ctx(ctx)
+func Fatalf(format string, args ...any) {
+	_, file, line, ok := runtime.Caller(1)
+	event := defaultLogger.logger.Fatal()
+	if ok {
+		event = event.Str("caller", filepath.Base(file)+":"+strconv.Itoa(line))
+	}
+	event.Msgf(format, args...)
+	// zerolog will call os.Exit(1) when the event is actually logged
 }

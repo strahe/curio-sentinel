@@ -92,7 +92,7 @@ func (s *Sentinel) Stop() (err error) {
 		}
 	}()
 	if err := s.Capturer.Stop(); err != nil {
-		log.Error().Err(err).Msg("failed to stop capturer")
+		log.Errorf("failed to stop capturer: %v", err)
 	}
 	s.cancel()
 	s.wg.Wait()
@@ -120,29 +120,26 @@ func (s *Sentinel) processEvents() {
 	for {
 		select {
 		case <-s.ctx.Done():
-			log.Info().Msg("Event processing stopped due to context cancellation")
+			log.Infof("Event processing stopped due to context cancellation")
 			return
 
 		case event, ok := <-events:
 			if !ok {
-				log.Info().Msg("Event channel closed, stopping event processing")
+				log.Infof("Event channel closed, stopping event processing")
 				return
 			}
 
 			processedEvent, err := s.Processor.Process(event)
 			if err != nil {
-				log.Error().Err(err).Str("eventID", event.ID).Msg("Failed to process event")
+				log.Errorf("Failed to process event: %v", err)
 				continue
 			}
 
 			if processedEvent != nil {
 				if err := s.Sink.Write(s.ctx, []*capturer.Event{processedEvent}); err != nil {
-					log.Error().Err(err).Str("eventID", processedEvent.ID).Msg("Failed to write event to sink")
+					log.Errorf("Failed to write event to sink: %v", err)
 				} else {
-					log.Info().
-						Str("lsn", processedEvent.LSN).
-						Str("delay", time.Since(processedEvent.Timestamp).String()).
-						Msg("Processed event")
+					log.Debugf("Processed event: %v", processedEvent)
 					s.updateLastCheckpoint(processedEvent.LSN)
 				}
 			}
@@ -166,7 +163,7 @@ func (s *Sentinel) updateCheckpoint(ctx context.Context) {
 
 	if checkpoint != "" {
 		if err := s.Capturer.ACK(ctx, checkpoint); err != nil {
-			log.Error().Err(err).Str("checkpoint", checkpoint).Msg("Failed to update checkpoint")
+			log.Errorf("Failed to update checkpoint: %v", err)
 		}
 	}
 }

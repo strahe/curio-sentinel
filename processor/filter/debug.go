@@ -13,7 +13,7 @@ func NewDebugFilter() *DebugFilter {
 }
 
 func (f *DebugFilter) Process(event *capturer.Event) (*capturer.Event, error) {
-	log.Debug().Msgf("Filter event: %s: %s", event.ID, event.Type)
+	log.Debugf("Filter event: %s: %s", event.ID, event.Type)
 	return event, nil
 }
 

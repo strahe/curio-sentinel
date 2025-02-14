@@ -256,7 +256,7 @@ func (y *YugabyteCapture) ACK(ctx context.Context, position string) error {
 	}
 	if lsn != y.appliedLSN {
 		y.appliedLSN = lsn
-		y.logger.Infof("ACK: %s", lsn.String())
+		y.logger.Debugf("ACK: %s", lsn.String())
 	}
 
 	return nil

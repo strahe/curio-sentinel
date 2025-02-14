@@ -5,9 +5,9 @@ import "time"
 type OperationType string
 
 const (
-	Insert OperationType = "INSERT"
-	Update OperationType = "UPDATE"
-	Delete OperationType = "DELETE"
+	OperationTypeInsert OperationType = "INSERT"
+	OperationTypeUpdate OperationType = "UPDATE"
+	OperationTypeDelete OperationType = "DELETE"
 )
 
 type Event struct {

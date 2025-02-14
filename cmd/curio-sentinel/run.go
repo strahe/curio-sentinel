@@ -33,27 +33,24 @@ var runCmd = &cli.Command{
 		ctx, cancel := context.WithCancel(ctx)
 		defer cancel()
 
-		cfg, err := config.LoadFromFile(c.String("config"))
-		if err != nil {
-			log.Fatal().Err(err).Msg("Failed to load configuration")
-		}
+		cfg := ctx.Value("config").(*config.Config)
 
 		sigChan := make(chan os.Signal, 1)
 		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
 		capturer, err := setupCapturer(cfg)
 		if err != nil {
-			log.Fatal().Err(err).Msg("Failed to setup capturer")
+
 		}
 
 		proc, err := setupProcessor(cfg)
 		if err != nil {
-			log.Fatal().Err(err).Msg("Failed to setup processor")
+			log.Fatalf("Failed to setup processor: %v", err)
 		}
 
 		s, err := setupSink(cfg)
 		if err != nil {
-			log.Fatal().Err(err).Msg("Failed to setup sink")
+			log.Fatalf("Failed to setup sink: %v", err)
 		}
 
 		sentinelSystem := sentinel.NewSentinel(
@@ -62,34 +59,31 @@ var runCmd = &cli.Command{
 			s,
 		)
 
-		// 启动Sentinel
 		if err := sentinelSystem.Start(ctx); err != nil {
-			log.Fatal().Err(err).Msg("Failed to start sentinel")
+			log.Fatalf("Failed to start sentinel: %v", err)
 		}
 
-		log.Info().Msg("Sentinel system started successfully")
+		log.Infof("Sentinel system started successfully")
 
-		// 等待终止信号
 		sig := <-sigChan
-		log.Info().Str("signal", sig.String()).Msg("Received signal")
+		log.Infof("Received signal: %s", sig.String())
 
 		if err := sentinelSystem.Stop(); err != nil {
-			log.Info().Err(err).Msg("Failed to stop sentinel")
-			os.Exit(1)
+			log.Fatalf("Failed to stop sentinel: %v", err)
 		}
 
-		log.Info().Msg("Sentinel")
+		log.Infof("Sentinel system stopped successfully")
 		return nil
 	},
 }
 
 func setupCapturer(cfg *config.Config) (capturer.Capturer, error) {
-	log.Info().Msgf("Setup capture")
-	return capturer.NewYugabyteCapturer(capturer.Config(cfg.Capturer), log.NewZerologAdapter(log.Logger)), nil
+	log.Infof("Setup capturer")
+	return capturer.NewYugabyteCapturer(capturer.Config(cfg.Capturer), log.NewLogger("capturer", os.Stdout)), nil
 }
 
 func setupProcessor(cfg *config.Config) (processor.Processor, error) {
-	log.Info().Msgf("Setup processor")
+	log.Infof("Setup processor")
 
 	processor := processor.NewProcessorChain()
 
@@ -105,12 +99,11 @@ func setupProcessor(cfg *config.Config) (processor.Processor, error) {
 }
 
 func setupSink(cfg *config.Config) (sink.Sink, error) {
-	log.Info().Msgf("Setup sink")
+	log.Infof("Setup sink")
 
 	switch cfg.Sink.Type {
-	case "stdout":
-		return sink.NewStdoutSink(), nil
-
+	case "console":
+		return sink.NewConsoleSink(), nil
 	default:
 		return nil, fmt.Errorf("unsupported sink type: %s", cfg.Sink.Type)
 	}

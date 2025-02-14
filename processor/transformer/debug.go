@@ -14,7 +14,7 @@ func NewDebugTransformer() *DebugTransformer {
 
 // Process implements processor.EventProcessor.
 func (d *DebugTransformer) Process(event *capturer.Event) (*capturer.Event, error) {
-	log.Debug().Msgf("Transformer event: %s: %s", event.ID, event.Type)
+	log.Debugf("Transform event: %s: %s", event.ID, event.Type)
 	return event, nil
 }
 

@@ -127,7 +127,7 @@ func (p *Processor) handleUpdate(msg *yblogrepl.UpdateMessage) error {
 	p.logger.Debugf("Update %s.%s", rel.Namespace, rel.RelationName)
 
 	evt := &Event{
-		Type:       Update,
+		Type:       OperationTypeUpdate,
 		Schema:     rel.Namespace,
 		Table:      rel.RelationName,
 		Before:     map[string]any{},
@@ -189,7 +189,7 @@ func (p *Processor) handleInsert(msg *yblogrepl.InsertMessage) error {
 	p.logger.Debugf("Insert %s.%s", rel.Namespace, rel.RelationName)
 
 	evt := &Event{
-		Type:       Insert,
+		Type:       OperationTypeInsert,
 		Schema:     rel.Namespace,
 		Table:      rel.RelationName,
 		After:      map[string]any{},
@@ -230,7 +230,7 @@ func (p *Processor) handleDelete(msg *yblogrepl.DeleteMessage) error {
 	p.logger.Debugf("Delete %s.%s", rel.Namespace, rel.RelationName)
 
 	evt := &Event{
-		Type:       Delete,
+		Type:       OperationTypeDelete,
 		Schema:     rel.Namespace,
 		Table:      rel.RelationName,
 		Before:     map[string]any{},
