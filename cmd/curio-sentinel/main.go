@@ -18,6 +18,14 @@ func main() {
 		Commands: []*cli.Command{
 			runCmd,
 		},
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:    "config",
+				Aliases: []string{"c"},
+				Usage:   "Path to the configuration file",
+				Value:   "config.toml",
+			},
+		},
 		Before: func(ctx context.Context, c *cli.Command) (context.Context, error) {
 			cfg, err := config.LoadFromFile(c.String("config"))
 			if err != nil {

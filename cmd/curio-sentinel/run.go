@@ -21,14 +21,6 @@ import (
 var runCmd = &cli.Command{
 	Name:  "run",
 	Usage: "Run the Curio Sentinel processor",
-	Flags: []cli.Flag{
-		&cli.StringFlag{
-			Name:    "config",
-			Aliases: []string{"c"},
-			Usage:   "Path to the configuration file",
-			Value:   "config.toml",
-		},
-	},
 	Action: func(ctx context.Context, c *cli.Command) error {
 		ctx, cancel := context.WithCancel(ctx)
 		defer cancel()

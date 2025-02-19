@@ -180,7 +180,6 @@ func (y *YugabyteCapture) startReplication(ctx context.Context) {
 				y.logger.Errorf("failed to receive message: %v", err)
 			}
 
-			<-time.After(time.Second)
 			switch msg := rawMsg.(type) {
 			case *pgproto3.ErrorResponse:
 				y.logger.Errorf("error response received: %v", msg.Message)
