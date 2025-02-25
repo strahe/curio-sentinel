@@ -7,9 +7,9 @@ import (
 	"os/signal"
 	"syscall"
 
+	logging "github.com/ipfs/go-log"
 	"github.com/strahe/curio-sentinel/capturer"
 	"github.com/strahe/curio-sentinel/config"
-	"github.com/strahe/curio-sentinel/pkg/log"
 	"github.com/strahe/curio-sentinel/processor"
 	"github.com/strahe/curio-sentinel/processor/filter"
 	"github.com/strahe/curio-sentinel/processor/transformer"
@@ -71,7 +71,7 @@ var runCmd = &cli.Command{
 
 func setupCapturer(cfg *config.Config) (capturer.Capturer, error) {
 	log.Infof("Setup capturer")
-	return capturer.NewYugabyteCapturer(capturer.Config(cfg.Capturer), log.NewLogger("capturer", os.Stdout)), nil
+	return capturer.NewYugabyteCapturer(capturer.Config(cfg.Capturer), logging.Logger("capturer")), nil
 }
 
 func setupProcessor(cfg *config.Config) (processor.Processor, error) {

@@ -1,6 +1,9 @@
 package capturer
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 type OperationType string
 
@@ -46,4 +49,27 @@ type Event struct {
 
 	// LSN is the Log Sequence Number of the event
 	LSN string `json:"lsn,omitempty"`
+}
+
+func (e *Event) String() string {
+	return fmt.Sprintf("%s %s.%s %s", e.Type, e.Schema, e.Table, e.pk())
+}
+
+func (e *Event) pk() string {
+	parts := make([]string, 0, len(e.PrimaryKey))
+	for k, v := range e.PrimaryKey {
+		parts = append(parts, fmt.Sprintf("%s=%v", k, v))
+	}
+	return fmt.Sprintf("<%s>", joinStrings(parts, ", "))
+}
+
+func joinStrings(strs []string, sep string) string {
+	if len(strs) == 0 {
+		return ""
+	}
+	result := strs[0]
+	for _, s := range strs[1:] {
+		result += sep + s
+	}
+	return result
 }

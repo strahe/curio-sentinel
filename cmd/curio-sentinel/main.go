@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/rs/zerolog"
+	logging "github.com/ipfs/go-log"
 	"github.com/strahe/curio-sentinel/config"
-	"github.com/strahe/curio-sentinel/pkg/log"
 	"github.com/urfave/cli/v3"
 )
+
+var log = logging.Logger("cmd")
 
 func main() {
 	cmd := &cli.Command{
@@ -31,15 +32,16 @@ func main() {
 			if err != nil {
 				return nil, fmt.Errorf("failed to load configuration: %w", err)
 			}
+
 			switch cfg.LogLevel {
 			case "debug":
-				log.SetGlobalLevel(zerolog.DebugLevel)
-			case "info":
-				log.SetGlobalLevel(zerolog.InfoLevel)
+				logging.SetAllLoggers(logging.LevelDebug)
 			case "warn":
-				log.SetGlobalLevel(zerolog.WarnLevel)
+				logging.SetAllLoggers(logging.LevelWarn)
 			case "error":
-				log.SetGlobalLevel(zerolog.ErrorLevel)
+				logging.SetAllLoggers(logging.LevelError)
+			default:
+				logging.SetAllLoggers(logging.LevelInfo)
 			}
 			return context.WithValue(ctx, "config", cfg), nil
 		},

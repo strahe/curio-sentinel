@@ -6,11 +6,13 @@ import (
 	"sync"
 	"time"
 
+	logging "github.com/ipfs/go-log"
 	"github.com/strahe/curio-sentinel/capturer"
-	"github.com/strahe/curio-sentinel/pkg/log"
 	"github.com/strahe/curio-sentinel/processor"
 	"github.com/strahe/curio-sentinel/sink"
 )
+
+var log = logging.Logger("sentinel")
 
 type Status string
 
@@ -139,7 +141,7 @@ func (s *Sentinel) processEvents() {
 				if err := s.Sink.Write(s.ctx, []*capturer.Event{processedEvent}); err != nil {
 					log.Errorf("Failed to write event to sink: %v", err)
 				} else {
-					log.Debugf("Processed event: %v", processedEvent)
+					log.Debug(processedEvent.String())
 					s.updateLastCheckpoint(processedEvent.LSN)
 				}
 			}

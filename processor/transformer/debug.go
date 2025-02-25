@@ -2,7 +2,6 @@ package transformer
 
 import (
 	"github.com/strahe/curio-sentinel/capturer"
-	"github.com/strahe/curio-sentinel/pkg/log"
 	"github.com/strahe/curio-sentinel/processor"
 )
 
