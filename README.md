@@ -4,6 +4,74 @@ A CLI tool and library for monitoring database changes in Curio clusters.
 
 It builds on top of YugabyteDB's CDC feature and provides a simple way to monitor changes in the database.
 
+## Table of Contents
+* [Standalone Program Usage](#standalone-program-usage)
+  * [Installation](#installation)
+  * [Configuration](#configuration)
+  * [Running](#running)
+* [Library Usage](#library-usage)
+  * [Basic Usage](#basic-usage)
+  * [Terminal Output Example](#terminal-output-example)
+* [Replica Identity and Output Differences](#replica-identity-and-output-differences)
+  * [Replica Identity Types](#replica-identity-types)
+  * [Output Comparison with Different Replica Identity Settings](#output-comparison-with-different-replica-identity-settings)
+* [YugabyteDB logical replication library for Go](#yugabytedb-logical-replication-library-for-go)
+
+## Standalone Program Usage
+
+When used as a standalone program, curio-sentinel can be run directly from the command line without writing any additional code.
+
+### Installation
+
+To install the standalone program, run the following command:
+
+```shell
+make build
+```
+
+### Configuration
+
+Create a `config.toml` configuration file with the following settings:
+
+```toml
+log_level = "debug"  # Optional: debug, info, warn, error
+
+[capturer]
+# Optional: customize slot and publication names
+# slot_name = "curio_sentinel_slot"
+# publication_name = "curio_sentinel_pub"
+# drop_slot_on_stop = true
+# drop_publication_on_stop = true
+
+[capturer.database]
+hosts = ["localhost"]
+port = 5433
+username = "yugabyte"
+password = "yugabyte"
+database = "your_database"
+
+[sink]
+type = "console"  # Currently supports "console" output
+```
+### Running
+
+```shell
+# Run with default config path (config.toml)
+./curio-sentinel run
+
+# Run with custom config path
+./curio-sentinel run -c your-config.toml
+```
+
+Once started, the program will monitor database changes according to your configuration, filter and transform events as specified, and output them to the configured sink (default: console).
+
+#### Insert
+![insert](assets/console_insert.png)
+#### Update
+![update](assets/console_update.png)
+#### Delete
+![delete](assets/console_delete.png)
+
 ## Library Usage
 
 ### Basic Usage
@@ -195,3 +263,9 @@ Data: {
   "update_time": "2025-01-27T23:45:41.907074Z"
 }
 ```
+
+## YugabyteDB Logical Replication Library for Go
+
+Examples: [yugabyte.go](capturer/yugabyte.go)
+
+Check out the [yblogrepl](yblogrepl/) for more information.
