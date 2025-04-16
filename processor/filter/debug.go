@@ -1,8 +1,8 @@
 package filter
 
 import (
-	"github.com/strahe/curio-sentinel/capturer"
-	"github.com/strahe/curio-sentinel/processor"
+	"github.com/web3tea/curio-sentinel/capturer"
+	"github.com/web3tea/curio-sentinel/processor"
 )
 
 type DebugFilter struct{}

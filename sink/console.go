@@ -16,7 +16,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/jedib0t/go-pretty/v6/text"
-	"github.com/strahe/curio-sentinel/capturer"
+	"github.com/web3tea/curio-sentinel/capturer"
 )
 
 // ConsoleSink implements the Sink interface to output events to the console in a pretty table format

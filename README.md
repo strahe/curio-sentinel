@@ -88,7 +88,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/strahe/curio-sentinel/capturer"
+	"github.com/web3tea/curio-sentinel/capturer"
 )
 
 func main() {

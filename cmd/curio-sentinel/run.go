@@ -8,14 +8,14 @@ import (
 	"syscall"
 
 	logging "github.com/ipfs/go-log"
-	"github.com/strahe/curio-sentinel/capturer"
-	"github.com/strahe/curio-sentinel/config"
-	"github.com/strahe/curio-sentinel/processor"
-	"github.com/strahe/curio-sentinel/processor/filter"
-	"github.com/strahe/curio-sentinel/processor/transformer"
-	"github.com/strahe/curio-sentinel/sentinel"
-	"github.com/strahe/curio-sentinel/sink"
 	"github.com/urfave/cli/v3"
+	"github.com/web3tea/curio-sentinel/capturer"
+	"github.com/web3tea/curio-sentinel/config"
+	"github.com/web3tea/curio-sentinel/processor"
+	"github.com/web3tea/curio-sentinel/processor/filter"
+	"github.com/web3tea/curio-sentinel/processor/transformer"
+	"github.com/web3tea/curio-sentinel/sentinel"
+	"github.com/web3tea/curio-sentinel/sink"
 )
 
 var runCmd = &cli.Command{

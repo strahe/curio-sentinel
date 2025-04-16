@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/strahe/curio-sentinel/yblogrepl"
+	"github.com/web3tea/curio-sentinel/yblogrepl"
 )
 
 type TransactionTracker struct {

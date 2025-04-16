@@ -3,7 +3,7 @@ package sink
 import (
 	"context"
 
-	"github.com/strahe/curio-sentinel/capturer"
+	"github.com/web3tea/curio-sentinel/capturer"
 )
 
 type Sink interface {

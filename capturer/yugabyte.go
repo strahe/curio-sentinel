@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/strahe/curio-sentinel/yblogrepl"
+	"github.com/web3tea/curio-sentinel/yblogrepl"
 	"github.com/yugabyte/pgx/v5/pgconn"
 	"github.com/yugabyte/pgx/v5/pgproto3"
 )
