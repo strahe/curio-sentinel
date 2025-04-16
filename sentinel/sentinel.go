@@ -7,9 +7,9 @@ import (
 	"time"
 
 	logging "github.com/ipfs/go-log"
-	"github.com/strahe/curio-sentinel/capturer"
-	"github.com/strahe/curio-sentinel/processor"
-	"github.com/strahe/curio-sentinel/sink"
+	"github.com/web3tea/curio-sentinel/capturer"
+	"github.com/web3tea/curio-sentinel/processor"
+	"github.com/web3tea/curio-sentinel/sink"
 )
 
 var log = logging.Logger("sentinel")

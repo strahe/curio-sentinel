@@ -6,8 +6,8 @@ import (
 	"os"
 
 	logging "github.com/ipfs/go-log"
-	"github.com/strahe/curio-sentinel/config"
 	"github.com/urfave/cli/v3"
+	"github.com/web3tea/curio-sentinel/config"
 )
 
 var log = logging.Logger("cmd")

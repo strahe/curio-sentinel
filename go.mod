@@ -1,4 +1,4 @@
-module github.com/strahe/curio-sentinel
+module github.com/web3tea/curio-sentinel
 
 go 1.23.3
 

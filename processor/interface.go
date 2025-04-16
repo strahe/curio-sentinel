@@ -1,7 +1,7 @@
 package processor
 
 import (
-	"github.com/strahe/curio-sentinel/capturer"
+	"github.com/web3tea/curio-sentinel/capturer"
 )
 
 type EventProcessor interface {

@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
-	"github.com/strahe/curio-sentinel/capturer"
+	"github.com/web3tea/curio-sentinel/capturer"
 )
 
 type Config struct {

@@ -3,7 +3,7 @@ package processor
 import (
 	"sync"
 
-	"github.com/strahe/curio-sentinel/capturer"
+	"github.com/web3tea/curio-sentinel/capturer"
 )
 
 type ProcessorChain struct {
