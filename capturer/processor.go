@@ -306,11 +306,8 @@ WHERE
 		if len(row) != 1 {
 			return nil, fmt.Errorf("expected 1 column in result, got %d", len(row))
 		}
-		fmt.Println("1111111111111111111111", string(row[0]))
 		pkColumns = append(pkColumns, string(row[0]))
 	}
-
-	fmt.Println("pkColumns", pkColumns)
 
 	if len(pkColumns) > 0 {
 		rel.PKColumns = pkColumns

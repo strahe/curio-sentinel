@@ -36,12 +36,12 @@ func (t *TransactionTracker) End(lsn, endLsn yblogrepl.LSN, commitTime time.Time
 
 	t.transactionEndLSN = endLsn
 
-	penddingEvents := t.pendingEvents
+	pendingEvents := t.pendingEvents
 
 	t.pendingEvents = t.pendingEvents[:0]
 	t.eventCounter = 0
 
-	return penddingEvents
+	return pendingEvents
 }
 
 func (t *TransactionTracker) AddEvent(event *Event) {
