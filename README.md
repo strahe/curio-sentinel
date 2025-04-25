@@ -123,12 +123,19 @@ func main() {
 
 			// handle event
 			switch event.Type {
-			case capturer.Insert, capturer.Delete:
-				printJSON("Data", event.Data)
-			case capturer.Update:
-				printJSON("Before", event.Data["before"])
-				printJSON("After", event.Data["after"])
+			case capturer.OperationTypeInsert:
+				printJSON("After", event.After)
+			case capturer.OperationTypeDelete:
+				printJSON("Before", event.Before)
+			case capturer.OperationTypeUpdate:
+				printJSON("Before", event.Before)
+				printJSON("After", event.After)
 			}
+			
+			if len(event.PrimaryKey) > 0 {
+				printJSON("PrimaryKey", event.PrimaryKey)
+			}
+			
 			// Acknowledge the event
 			cap.ACK(context.Background(), event.LSN)
 		}
@@ -161,7 +168,7 @@ When running the above code and performing operations in the database, the termi
 ```
 ------------------------------------------------------
 Event: INSERT on curio.harmony_task at 2025-01-27 23:30:45.123456
-Data: {
+After: {
   "added_by": 1,
   "id": 48821,
   "initiated_by": null,
@@ -172,25 +179,51 @@ Data: {
   "retries": 0,
   "update_time": "2025-01-27T23:30:10.36213Z"
 }
+PrimaryKey: {
+  "id": 48821
+}
 ------------------------------------------------------
 Event: UPDATE on curio.harmony_task at 2025-01-27 23:31:12.654321
-Before: {}
-After: {
+Before: {
+  "added_by": 1,
   "id": 48821,
-  "owner_id": 1
+  "initiated_by": null,
+  "name": "WinPost",
+  "owner_id": null,
+  "posted_time": "2025-01-27T23:30:10.36213Z",
+  "previous_task": null,
+  "retries": 0,
+  "update_time": "2025-01-27T23:30:10.36213Z"
+}
+After: {
+  "added_by": 1,
+  "id": 48821,
+  "initiated_by": null,
+  "name": "WinPost",
+  "owner_id": 1,
+  "posted_time": "2025-01-27T23:30:10.36213Z",
+  "previous_task": null,
+  "retries": 0,
+  "update_time": "2025-01-27T23:30:10.36213Z"
+}
+PrimaryKey: {
+  "id": 48821
 }
 ------------------------------------------------------
 Event: DELETE on curio.harmony_task at 2025-01-27 23:33:21.987654
-Data: {
-  "added_by": null,
+Before: {
+  "added_by": 1,
   "id": 48821,
   "initiated_by": null,
-  "name": null,
-  "owner_id": null,
-  "posted_time": null,
+  "name": "WinPost",
+  "owner_id": 1,
+  "posted_time": "2025-01-27T23:30:10.36213Z",
   "previous_task": null,
-  "retries": null,
-  "update_time": null
+  "retries": 0,
+  "update_time": "2025-01-27T23:30:10.36213Z"
+}
+PrimaryKey: {
+  "id": 48821
 }
 ```
 
@@ -246,12 +279,15 @@ After: {
   "retries": 0,
   "update_time": "2025-01-27T23:45:41.907074Z"
 }
+PrimaryKey: {
+  "id": 50337
+}
 ```
 
 **DELETE operation output example:**
 ```
 Event: DELETE on curio.harmony_task at 2025-01-27 23:45:55.803845 +0800 CST
-Data: {
+Before: {
   "added_by": 1,
   "id": 50337,
   "initiated_by": null,
@@ -261,6 +297,9 @@ Data: {
   "previous_task": null,
   "retries": 0,
   "update_time": "2025-01-27T23:45:41.907074Z"
+}
+PrimaryKey: {
+  "id": 50337
 }
 ```
 
